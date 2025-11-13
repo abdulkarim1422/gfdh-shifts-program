@@ -8,30 +8,78 @@ interface StatisticsProps {
 
 const Statistics: React.FC<StatisticsProps> = ({ shiftData }) => {
   const [isRelativeMode, setIsRelativeMode] = useState(false);
+  const [showCalendarModal, setShowCalendarModal] = useState(false);
+  const [selectedDoctor, setSelectedDoctor] = useState<string>('');
+  const [selectedMonth, setSelectedMonth] = useState<number>(10); // November (0-indexed)
+  const [selectedYear, setSelectedYear] = useState<number>(2025);
+
+  // Function to open modal for calendar export
+  const openCalendarModal = (doctorName: string) => {
+    setSelectedDoctor(doctorName);
+    setShowCalendarModal(true);
+  };
 
   // Function to generate iCalendar (.ics) file for a doctor's shifts
-  const generateCalendarFile = (doctorName: string) => {
-    const doctorShifts = shiftData.allShifts.filter(shift => shift.name === doctorName);
+  const generateCalendarFile = () => {
+    const doctorShifts = shiftData.allShifts.filter(shift => shift.name === selectedDoctor);
+    
+    // Helper function to create date-time with selected month/year
+    const createShiftDateTime = (day: number, hour: number, addDay: number = 0): Date => {
+      const date = new Date(selectedYear, selectedMonth, day + addDay, hour, 0, 0);
+      return date;
+    };
+
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                        'July', 'August', 'September', 'October', 'November', 'December'];
+    const monthName = monthNames[selectedMonth];
     
     let icsContent = `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Shift Schedule//EN
 CALSCALE:GREGORIAN
 METHOD:PUBLISH
-X-WR-CALNAME:${doctorName} - ${shiftData.month} Shifts
+X-WR-CALNAME:${selectedDoctor} - ${monthName} ${selectedYear} Shifts
 X-WR-TIMEZONE:UTC
 `;
 
     doctorShifts.forEach((shift, index) => {
-      const startDate = shift.startDateTime.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-      const endDate = shift.endDateTime.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+      // Recreate shift dates with the selected month and year
+      let startDate: Date;
+      let endDate: Date;
+
+      switch (shift.shiftType) {
+        case 'morning':
+          startDate = createShiftDateTime(shift.day, 8);
+          endDate = createShiftDateTime(shift.day, 20);
+          break;
+        case 'evening':
+          startDate = createShiftDateTime(shift.day, 20);
+          endDate = createShiftDateTime(shift.day, 8, 1);
+          break;
+        case '8h':
+          startDate = createShiftDateTime(shift.day, 8);
+          endDate = createShiftDateTime(shift.day, 16);
+          break;
+        case '16h':
+          startDate = createShiftDateTime(shift.day, 8);
+          endDate = createShiftDateTime(shift.day, 0, 1);
+          break;
+        case '24h':
+        default:
+          startDate = createShiftDateTime(shift.day, 8);
+          endDate = createShiftDateTime(shift.day, 8, 1);
+          break;
+      }
+
+      const startDateStr = startDate.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+      const endDateStr = endDate.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
       const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
       
       icsContent += `BEGIN:VEVENT
-UID:shift-${doctorName}-${shift.day}-${index}@shifts-program
+UID:shift-${selectedDoctor}-${shift.day}-${index}@shifts-program
 DTSTAMP:${now}
-DTSTART:${startDate}
-DTEND:${endDate}
+DTSTART:${startDateStr}
+DTEND:${endDateStr}
 SUMMARY:${shift.shiftType.toUpperCase()} Shift - ${shift.region}
 DESCRIPTION:Shift Type: ${shift.shiftType}\\nRegion: ${shift.region}\\nHours: ${shift.hours}h
 LOCATION:${shift.region}
@@ -46,11 +94,14 @@ END:VEVENT
     const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `${doctorName.replace(/\s+/g, '_')}_${shiftData.month.replace(/\s+/g, '_')}_shifts.ics`;
+    link.download = `${selectedDoctor.replace(/\s+/g, '_')}_${monthName}_${selectedYear}_shifts.ics`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(link.href);
+    
+    // Close modal
+    setShowCalendarModal(false);
   };
 
   const statistics = useMemo(() => {
@@ -217,7 +268,7 @@ END:VEVENT
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <button
-                    onClick={() => generateCalendarFile(stat.name)}
+                    onClick={() => openCalendarModal(stat.name)}
                     className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                     title="Download calendar file for all shifts"
                   >
@@ -289,6 +340,79 @@ END:VEVENT
           })}
         </div>
       </div>
+
+      {/* Calendar Export Modal */}
+      {showCalendarModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+            <h3 className="text-xl font-semibold text-gray-800 mb-4">
+              Export Calendar for {selectedDoctor}
+            </h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="month-select" className="block text-sm font-medium text-gray-700 mb-2">
+                  Select Month:
+                </label>
+                <select
+                  id="month-select"
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                >
+                  <option value={0}>January</option>
+                  <option value={1}>February</option>
+                  <option value={2}>March</option>
+                  <option value={3}>April</option>
+                  <option value={4}>May</option>
+                  <option value={5}>June</option>
+                  <option value={6}>July</option>
+                  <option value={7}>August</option>
+                  <option value={8}>September</option>
+                  <option value={9}>October</option>
+                  <option value={10}>November</option>
+                  <option value={11}>December</option>
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="year-select" className="block text-sm font-medium text-gray-700 mb-2">
+                  Select Year:
+                </label>
+                <input
+                  id="year-select"
+                  type="number"
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(Number(e.target.value))}
+                  min={2020}
+                  max={2030}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="text-sm text-gray-600 bg-blue-50 rounded p-3">
+                <p className="font-medium mb-1">Note:</p>
+                <p>The calendar file (.ics) will contain all shifts for this doctor with the dates set to the selected month and year.</p>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={generateCalendarFile}
+                className="flex-1 px-4 py-2 bg-indigo-600 text-white font-medium rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+              >
+                Download Calendar
+              </button>
+              <button
+                onClick={() => setShowCalendarModal(false)}
+                className="flex-1 px-4 py-2 bg-gray-200 text-gray-800 font-medium rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
