@@ -188,7 +188,7 @@ const Statistics: React.FC<StatisticsProps> = ({ shiftData }) => {
           </button>
         </div>
         <div className="space-y-3">
-          {statistics.slice(0, 10).map((stat) => {
+          {statistics.map((stat) => {
             const maxHours = statistics[0]?.totalHours || 1;
             const absolutePercentage = totalHours > 0 ? (stat.totalHours / totalHours) * 100 : 0;
             const relativePercentage = maxHours > 0 ? (stat.totalHours / maxHours) * 100 : 0;
