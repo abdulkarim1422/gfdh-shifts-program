@@ -24,9 +24,76 @@ const ShiftValidator: React.FC<ShiftValidatorProps> = ({
 }) => {
   const [selectedError, setSelectedError] = useState<number | null>(null);
   const [suggestions, setSuggestions] = useState<SwapSuggestion[]>([]);
-  const [filterDays, setFilterDays] = useState<string>('');
-  const [filterDoctor, setFilterDoctor] = useState<string>('');
+  const [selectedDays, setSelectedDays] = useState<number[]>([]);
+  const [selectedDoctors, setSelectedDoctors] = useState<string[]>([]);
+  const [daySearchInput, setDaySearchInput] = useState<string>('');
+  const [doctorSearchInput, setDoctorSearchInput] = useState<string>('');
+  const [showDaySuggestions, setShowDaySuggestions] = useState(false);
+  const [showDoctorSuggestions, setShowDoctorSuggestions] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
+
+  // Get all available days and doctors
+  const allAvailableDays = Array.from(new Set(shiftData.allShifts.map(s => s.day))).sort((a, b) => a - b);
+  const allAvailableDoctors = Array.from(new Set(shiftData.allShifts.map(s => s.name))).sort();
+
+  // Filtered suggestions based on search input
+  const filteredDaySuggestions = allAvailableDays.filter(day => 
+    !selectedDays.includes(day) && 
+    String(day).includes(daySearchInput)
+  );
+
+  const filteredDoctorSuggestions = allAvailableDoctors.filter(doctor =>
+    !selectedDoctors.includes(doctor) &&
+    doctor.toLowerCase().includes(doctorSearchInput.toLowerCase())
+  );
+
+  const addDay = (day: number) => {
+    if (!selectedDays.includes(day)) {
+      setSelectedDays([...selectedDays, day]);
+      setDaySearchInput('');
+      setShowDaySuggestions(false);
+    }
+  };
+
+  const removeDay = (day: number) => {
+    setSelectedDays(selectedDays.filter(d => d !== day));
+  };
+
+  const addDoctor = (doctor: string) => {
+    if (!selectedDoctors.includes(doctor)) {
+      setSelectedDoctors([...selectedDoctors, doctor]);
+      setDoctorSearchInput('');
+      setShowDoctorSuggestions(false);
+    }
+  };
+
+  const removeDoctor = (doctor: string) => {
+    setSelectedDoctors(selectedDoctors.filter(d => d !== doctor));
+  };
+
+  const handleDayInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && daySearchInput) {
+      const day = parseInt(daySearchInput);
+      if (!isNaN(day)) {
+        addDay(day);
+      }
+    } else if (e.key === 'Escape') {
+      setShowDaySuggestions(false);
+    }
+  };
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setShowDaySuggestions(false);
+      setShowDoctorSuggestions(false);
+    };
+
+    if (showDaySuggestions || showDoctorSuggestions) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [showDaySuggestions, showDoctorSuggestions]);
 
   const findSwapSuggestions = (errorIndex: number, error: ValidationError): SwapSuggestion[] => {
     if (!error.doctor || !error.day) return [];
@@ -44,21 +111,8 @@ const ShiftValidator: React.FC<ShiftValidatorProps> = ({
 
     // Determine which days to search (either filtered or all)
     let daysToSearch: number[] = [];
-    if (filterDays) {
-      const ranges = filterDays.split(',').map(s => s.trim());
-      ranges.forEach(range => {
-        if (range.includes('-')) {
-          const [start, end] = range.split('-').map(n => parseInt(n.trim()));
-          for (let d = start; d <= end; d++) {
-            if (!daysToSearch.includes(d)) daysToSearch.push(d);
-          }
-        } else {
-          const day = parseInt(range);
-          if (!isNaN(day) && !daysToSearch.includes(day)) {
-            daysToSearch.push(day);
-          }
-        }
-      });
+    if (selectedDays.length > 0) {
+      daysToSearch = selectedDays;
     } else {
       // Search all days except the problem day
       const allDays = Array.from(new Set(shiftData.allShifts.map(s => s.day)));
@@ -67,8 +121,8 @@ const ShiftValidator: React.FC<ShiftValidatorProps> = ({
 
     // Get all unique doctors
     const allDoctors = Array.from(new Set(shiftData.allShifts.map(s => s.name)));
-    const doctorsToConsider = filterDoctor 
-      ? allDoctors.filter(d => d.toLowerCase().includes(filterDoctor.toLowerCase()))
+    const doctorsToConsider = selectedDoctors.length > 0
+      ? selectedDoctors.filter(d => d !== problemDoctor)
       : allDoctors.filter(d => d !== problemDoctor);
 
     // For each potential swap candidate
@@ -464,39 +518,130 @@ const ShiftValidator: React.FC<ShiftValidatorProps> = ({
                 <h4 className="font-semibold text-blue-900 mb-3">Solution Suggestions</h4>
                 
                 {/* Filters */}
-                <div className="mb-4 space-y-2">
+                <div className="mb-4 space-y-3">
                   <div className="flex gap-3">
+                    {/* Days Filter */}
                     <div className="flex-1">
                       <label className="block text-xs font-medium text-blue-800 mb-1">
-                        Filter by Days (e.g., "1-5" or "3,7,10")
+                        Filter by Days
                       </label>
-                      <input
-                        type="text"
-                        value={filterDays}
-                        onChange={(e) => setFilterDays(e.target.value)}
-                        placeholder="e.g., 1-10 or 5,10,15"
-                        className="w-full px-3 py-1.5 text-sm border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={daySearchInput}
+                          onChange={(e) => {
+                            setDaySearchInput(e.target.value);
+                            setShowDaySuggestions(true);
+                          }}
+                          onKeyDown={handleDayInputKeyDown}
+                          onFocus={() => setShowDaySuggestions(true)}
+                          onClick={(e) => e.stopPropagation()}
+                          placeholder="Type day number..."
+                          className="w-full px-3 py-1.5 text-sm border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        {/* Day suggestions dropdown */}
+                        {showDaySuggestions && filteredDaySuggestions.length > 0 && (
+                          <div 
+                            className="absolute z-10 w-full mt-1 bg-white border border-blue-300 rounded shadow-lg max-h-40 overflow-y-auto"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {filteredDaySuggestions.slice(0, 10).map(day => (
+                              <button
+                                key={day}
+                                onClick={() => addDay(day)}
+                                className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors"
+                              >
+                                Day {day}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {/* Selected days as tags */}
+                      {selectedDays.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {selectedDays.map(day => (
+                            <span
+                              key={day}
+                              className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded"
+                            >
+                              Day {day}
+                              <button
+                                onClick={() => removeDay(day)}
+                                className="hover:text-blue-900"
+                              >
+                                ✕
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
+
+                    {/* Doctor Filter */}
                     <div className="flex-1">
                       <label className="block text-xs font-medium text-blue-800 mb-1">
                         Filter by Doctor Name
                       </label>
-                      <input
-                        type="text"
-                        value={filterDoctor}
-                        onChange={(e) => setFilterDoctor(e.target.value)}
-                        placeholder="e.g., john"
-                        className="w-full px-3 py-1.5 text-sm border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={doctorSearchInput}
+                          onChange={(e) => {
+                            setDoctorSearchInput(e.target.value);
+                            setShowDoctorSuggestions(true);
+                          }}
+                          onFocus={() => setShowDoctorSuggestions(true)}
+                          onClick={(e) => e.stopPropagation()}
+                          placeholder="Type doctor name..."
+                          className="w-full px-3 py-1.5 text-sm border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        {/* Doctor suggestions dropdown */}
+                        {showDoctorSuggestions && filteredDoctorSuggestions.length > 0 && (
+                          <div 
+                            className="absolute z-10 w-full mt-1 bg-white border border-blue-300 rounded shadow-lg max-h-40 overflow-y-auto"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {filteredDoctorSuggestions.slice(0, 10).map(doctor => (
+                              <button
+                                key={doctor}
+                                onClick={() => addDoctor(doctor)}
+                                className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors capitalize"
+                              >
+                                {doctor}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {/* Selected doctors as tags */}
+                      {selectedDoctors.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {selectedDoctors.map(doctor => (
+                            <span
+                              key={doctor}
+                              className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded capitalize"
+                            >
+                              {doctor}
+                              <button
+                                onClick={() => removeDoctor(doctor)}
+                                className="hover:text-blue-900"
+                              >
+                                ✕
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
+
                     <div className="flex items-end">
                       <button
                         onClick={() => {
                           const newSuggestions = findSwapSuggestions(index, error);
                           setSuggestions(newSuggestions);
                         }}
-                        className="px-4 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+                        className="px-4 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors whitespace-nowrap"
                       >
                         Apply Filters
                       </button>
