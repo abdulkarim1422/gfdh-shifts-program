@@ -46,8 +46,9 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError }) => {
     // Find where the actual data ends (before extra info)
     let dataEndIndex = rows.length;
     for (let i = 1; i < rows.length; i++) {
-      const firstCell = rows[i][0]?.trim();
-      if (!firstCell || firstCell === '' || isNaN(Number(firstCell))) {
+      const firstCell = rows[i][0];
+      const firstCellStr = firstCell != null ? String(firstCell).trim() : '';
+      if (!firstCellStr || firstCellStr === '' || isNaN(Number(firstCellStr))) {
         dataEndIndex = i;
         break;
       }
@@ -59,7 +60,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError }) => {
     // Parse each day's shifts
     for (let i = 1; i < dataEndIndex; i++) {
       const row = rows[i];
-      const day = parseInt(row[0]);
+      const day = parseInt(String(row[0]));
       
       if (isNaN(day)) continue;
       
@@ -67,7 +68,8 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError }) => {
       
       // Process each column (shift position)
       for (let col = 1; col < row.length; col++) {
-        const cell = row[col]?.trim();
+        const cellValue = row[col];
+        const cell = cellValue != null ? String(cellValue).trim() : '';
         if (!cell) continue;
         
         shifts.push(cell);
