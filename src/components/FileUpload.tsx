@@ -14,6 +14,12 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError }) => {
     const month = rows[0]?.[0] || 'Unknown';
     const headers = rows[0] || [];
     
+    // Helper function to create date-time for shifts
+    // Using a base year 2025 for calculations (can be any year)
+    const createShiftDateTime = (day: number, hour: number, addDay: number = 0): Date => {
+      return new Date(2025, 0, day + addDay, hour, 0, 0);
+    };
+    
     // Parse column headers to determine shift types
     const columnShiftTypes: Array<{type: 'split' | '24h' | '16h' | '8h' | 'unknown', hours: number}> = [];
     headers.forEach((header, index) => {
@@ -70,26 +76,32 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError }) => {
           const [name1, name2] = cell.split('/').map(n => n.trim());
           
           if (name1) {
+            // Morning shift: 08:00 - 20:00
             allShifts.push({
               name: name1.toLowerCase(),
               day,
               shiftType: 'morning',
               column: col,
-              hours: 12
+              hours: 12,
+              startDateTime: createShiftDateTime(day, 8),
+              endDateTime: createShiftDateTime(day, 20)
             });
           }
           
           if (name2) {
+            // Evening shift: 20:00 - 08:00 next day
             allShifts.push({
               name: name2.toLowerCase(),
               day,
               shiftType: 'evening',
               column: col,
-              hours: 12
+              hours: 12,
+              startDateTime: createShiftDateTime(day, 20),
+              endDateTime: createShiftDateTime(day, 8, 1) // next day at 08:00
             });
           }
         } else if (cell.match(/08-16/i) || columnType.type === '8h') {
-          // 8-hour shift (from cell content or column header)
+          // 8-hour shift: 08:00 - 16:00
           const name = cell.replace(/08-16/i, '').trim().toLowerCase();
           if (name) {
             allShifts.push({
@@ -97,11 +109,13 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError }) => {
               day,
               shiftType: '8h',
               column: col,
-              hours: 8
+              hours: 8,
+              startDateTime: createShiftDateTime(day, 8),
+              endDateTime: createShiftDateTime(day, 16)
             });
           }
         } else if (columnType.type === '16h') {
-          // 16-hour shift (from column header)
+          // 16-hour shift: 08:00 - 00:00
           const name = cell.replace(/\s*(16|yesil|yeşil)\s*/gi, '').trim().toLowerCase();
           if (name) {
             allShifts.push({
@@ -109,11 +123,13 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError }) => {
               day,
               shiftType: '16h',
               column: col,
-              hours: 16
+              hours: 16,
+              startDateTime: createShiftDateTime(day, 8),
+              endDateTime: createShiftDateTime(day, 0, 1) // next day at 00:00
             });
           }
         } else if (columnType.type === '24h') {
-          // 24-hour shift (from column header)
+          // 24-hour shift: 08:00 - 08:00 next day
           const name = cell.replace(/\s*(24|yesil|yeşil)\s*/gi, '').trim().toLowerCase();
           if (name) {
             allShifts.push({
@@ -121,17 +137,22 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError }) => {
               day,
               shiftType: '24h',
               column: col,
-              hours: 24
+              hours: 24,
+              startDateTime: createShiftDateTime(day, 8),
+              endDateTime: createShiftDateTime(day, 8, 1) // next day at 08:00
             });
           }
         } else {
           // Default: treat as determined by column type or 24h if unknown
+          const shiftType = columnType.type === 'unknown' ? '24h' : columnType.type as '24h' | '16h' | '8h';
           allShifts.push({
             name: cell.toLowerCase(),
             day,
-            shiftType: columnType.type === 'unknown' ? '24h' : columnType.type as '24h' | '16h' | '8h',
+            shiftType,
             column: col,
-            hours: columnType.hours
+            hours: columnType.hours,
+            startDateTime: createShiftDateTime(day, 8),
+            endDateTime: createShiftDateTime(day, 8, 1) // assume 24h default
           });
         }
       }

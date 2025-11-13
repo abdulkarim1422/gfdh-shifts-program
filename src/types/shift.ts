@@ -9,6 +9,8 @@ export interface DoctorShift {
   shiftType: '24h' | 'morning' | 'evening' | '16h' | '8h';
   column: number;
   hours: number; // Total hours for this shift
+  startDateTime: Date; // Actual start date and time
+  endDateTime: Date; // Actual end date and time
 }
 
 export interface ShiftData {

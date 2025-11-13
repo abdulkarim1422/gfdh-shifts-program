@@ -111,57 +111,43 @@ const ShiftValidator: React.FC<ShiftValidatorProps> = ({
         shiftsByDoctor.get(shift.name)!.push(shift);
       });
       
-      // Check each doctor's shifts for consecutive issues
+      // Check each doctor's shifts for insufficient rest time
       shiftsByDoctor.forEach((shifts, doctorName) => {
-        shifts.forEach(shift => {
-          // Check if this shift involves night duty that requires rest
-          // Evening shift (night) -> only problematic if followed by MORNING shift
-          // 24h shift -> problematic if followed by ANY shift
+        // Sort shifts by start time
+        const sortedShifts = [...shifts].sort((a, b) => 
+          a.startDateTime.getTime() - b.startDateTime.getTime()
+        );
+        
+        // Check consecutive shifts
+        for (let i = 0; i < sortedShifts.length - 1; i++) {
+          const currentShift = sortedShifts[i];
+          const nextShift = sortedShifts[i + 1];
           
-          if (shift.shiftType === 'evening') {
-            // Evening shift: only check if next day has a MORNING shift
-            const nextDayMorningShifts = shifts.filter(
-              s => s.day === shift.day + 1 && s.shiftType === 'morning'
+          // Calculate rest time between shifts (in hours)
+          const restTimeMs = nextShift.startDateTime.getTime() - currentShift.endDateTime.getTime();
+          const restTimeHours = restTimeMs / (1000 * 60 * 60);
+          
+          // Minimum rest time should be at least 8 hours
+          const minimumRestHours = 8;
+          
+          if (restTimeHours < minimumRestHours) {
+            const errorExists = newErrors.some(
+              e => e.day === currentShift.day && e.doctor === doctorName && 
+              e.message.includes(`day ${nextShift.day}`)
             );
             
-            if (nextDayMorningShifts.length > 0) {
-              const errorExists = newErrors.some(
-                e => e.day === shift.day && e.doctor === doctorName && 
-                e.message.includes('evening shift') && e.message.includes(`day ${shift.day + 1}`)
-              );
-              
-              if (!errorExists) {
-                newErrors.push({
-                  type: 'overlap',
-                  message: `Doctor "${doctorName}" has an evening shift on day ${shift.day} (ends late night) and a morning shift on day ${shift.day + 1}. Not enough rest time between shifts.`,
-                  day: shift.day,
-                  doctor: doctorName,
-                  severity: 'error'
-                });
-              }
-            }
-          } else if (shift.shiftType === '24h') {
-            // 24h shift: check if next day has ANY shift
-            const nextDayShifts = shifts.filter(s => s.day === shift.day + 1);
-            
-            if (nextDayShifts.length > 0) {
-              const errorExists = newErrors.some(
-                e => e.day === shift.day && e.doctor === doctorName && 
-                e.message.includes('24-hour shift') && e.message.includes(`day ${shift.day + 1}`)
-              );
-              
-              if (!errorExists) {
-                newErrors.push({
-                  type: 'overlap',
-                  message: `Doctor "${doctorName}" has a 24-hour shift on day ${shift.day} and another shift on day ${shift.day + 1}. No one should work after a 24-hour shift.`,
-                  day: shift.day,
-                  doctor: doctorName,
-                  severity: 'error'
-                });
-              }
+            if (!errorExists) {
+              const restTimeFormatted = restTimeHours.toFixed(1);
+              newErrors.push({
+                type: 'overlap',
+                message: `Doctor "${doctorName}" has insufficient rest between shifts: ${currentShift.shiftType} shift on day ${currentShift.day} ends at ${currentShift.endDateTime.getHours()}:00, and next shift on day ${nextShift.day} starts at ${nextShift.startDateTime.getHours()}:00. Only ${restTimeFormatted} hours rest (minimum ${minimumRestHours} hours required).`,
+                day: currentShift.day,
+                doctor: doctorName,
+                severity: 'error'
+              });
             }
           }
-        });
+        }
       });
       
       // Remove duplicate errors
