@@ -114,27 +114,46 @@ const ShiftValidator: React.FC<ShiftValidatorProps> = ({
       // Check each doctor's shifts for consecutive issues
       shiftsByDoctor.forEach((shifts, doctorName) => {
         shifts.forEach(shift => {
-          // Check if this shift involves night duty
-          // Night duty ONLY includes: evening shifts (night portion of split) and 24h shifts
-          // 16h shifts (08:00-00:00) are NOT night duty - they end at midnight
-          const isNightShift = shift.shiftType === 'evening' || 
-                              shift.shiftType === '24h';
+          // Check if this shift involves night duty that requires rest
+          // Evening shift (night) -> only problematic if followed by MORNING shift
+          // 24h shift -> problematic if followed by ANY shift
           
-          if (isNightShift) {
-            // Check if the doctor has any shift the next day
+          if (shift.shiftType === 'evening') {
+            // Evening shift: only check if next day has a MORNING shift
+            const nextDayMorningShifts = shifts.filter(
+              s => s.day === shift.day + 1 && s.shiftType === 'morning'
+            );
+            
+            if (nextDayMorningShifts.length > 0) {
+              const errorExists = newErrors.some(
+                e => e.day === shift.day && e.doctor === doctorName && 
+                e.message.includes('evening shift') && e.message.includes(`day ${shift.day + 1}`)
+              );
+              
+              if (!errorExists) {
+                newErrors.push({
+                  type: 'overlap',
+                  message: `Doctor "${doctorName}" has an evening shift on day ${shift.day} (ends late night) and a morning shift on day ${shift.day + 1}. Not enough rest time between shifts.`,
+                  day: shift.day,
+                  doctor: doctorName,
+                  severity: 'error'
+                });
+              }
+            }
+          } else if (shift.shiftType === '24h') {
+            // 24h shift: check if next day has ANY shift
             const nextDayShifts = shifts.filter(s => s.day === shift.day + 1);
             
             if (nextDayShifts.length > 0) {
               const errorExists = newErrors.some(
                 e => e.day === shift.day && e.doctor === doctorName && 
-                e.message.includes('night shift') && e.message.includes(`day ${shift.day + 1}`)
+                e.message.includes('24-hour shift') && e.message.includes(`day ${shift.day + 1}`)
               );
               
               if (!errorExists) {
-                const shiftTypeLabel = shift.shiftType === 'evening' ? 'evening' : '24-hour';
                 newErrors.push({
                   type: 'overlap',
-                  message: `Doctor "${doctorName}" has a ${shiftTypeLabel} shift on day ${shift.day} (night duty) and another shift on day ${shift.day + 1}. No one should work after night shift.`,
+                  message: `Doctor "${doctorName}" has a 24-hour shift on day ${shift.day} and another shift on day ${shift.day + 1}. No one should work after a 24-hour shift.`,
                   day: shift.day,
                   doctor: doctorName,
                   severity: 'error'
