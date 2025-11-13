@@ -12,6 +12,26 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError }) => {
   const parseShiftData = (rows: string[][]): ShiftData => {
     // First row contains month and column headers
     const month = rows[0]?.[0] || 'Unknown';
+    const headers = rows[0] || [];
+    
+    // Parse column headers to determine shift types
+    const columnShiftTypes: Array<{type: 'split' | '24h' | '16h' | '8h' | 'unknown', hours: number}> = [];
+    headers.forEach((header, index) => {
+      const h = header?.toLowerCase().trim() || '';
+      
+      if (h.includes('24') || h.includes('yirmi dört')) {
+        columnShiftTypes[index] = { type: '24h', hours: 24 };
+      } else if (h.includes('16') || h.includes('on altı')) {
+        columnShiftTypes[index] = { type: '16h', hours: 16 };
+      } else if (h.includes('gündüz') || h.includes('08-16') || h.includes('8-16')) {
+        columnShiftTypes[index] = { type: '8h', hours: 8 };
+      } else if (h.includes('/') || h.includes('sarı') || h.includes('müs')) {
+        // Split shift columns (morning/evening)
+        columnShiftTypes[index] = { type: 'split', hours: 12 };
+      } else {
+        columnShiftTypes[index] = { type: 'unknown', hours: 24 }; // default to 24h
+      }
+    });
     
     // Find where the actual data ends (before extra info)
     let dataEndIndex = rows.length;
@@ -42,8 +62,11 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError }) => {
         
         shifts.push(cell);
         
-        // Check if it's a split shift (morning/evening)
-        if (cell.includes('/')) {
+        // Get the shift type from column header
+        const columnType = columnShiftTypes[col] || { type: 'unknown', hours: 24 };
+        
+        // Check if it's a split shift (morning/evening) based on cell or column
+        if (cell.includes('/') || columnType.type === 'split') {
           const [name1, name2] = cell.split('/').map(n => n.trim());
           
           if (name1) {
@@ -65,8 +88,8 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError }) => {
               hours: 12
             });
           }
-        } else if (cell.match(/08-16/i)) {
-          // 8-hour shift (08-16 format)
+        } else if (cell.match(/08-16/i) || columnType.type === '8h') {
+          // 8-hour shift (from cell content or column header)
           const name = cell.replace(/08-16/i, '').trim().toLowerCase();
           if (name) {
             allShifts.push({
@@ -77,26 +100,24 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError }) => {
               hours: 8
             });
           }
-        } else if (cell.match(/\b(16|24)\b/)) {
-          // Check for number suffix (yeşil16, yeşil24, etc.)
-          const match = cell.match(/^(.+?)\s*(16|24)$/);
-          if (match) {
-            const name = match[1].trim().toLowerCase();
-            const hours = parseInt(match[2]);
-            
-            if (name) {
-              allShifts.push({
-                name,
-                day,
-                shiftType: hours === 16 ? '16h' : '24h',
-                column: col,
-                hours: hours
-              });
-            }
-          } else {
-            // If no match, treat as 24h shift
+        } else if (columnType.type === '16h') {
+          // 16-hour shift (from column header)
+          const name = cell.replace(/\s*(16|yesil|yeşil)\s*/gi, '').trim().toLowerCase();
+          if (name) {
             allShifts.push({
-              name: cell.toLowerCase(),
+              name,
+              day,
+              shiftType: '16h',
+              column: col,
+              hours: 16
+            });
+          }
+        } else if (columnType.type === '24h') {
+          // 24-hour shift (from column header)
+          const name = cell.replace(/\s*(24|yesil|yeşil)\s*/gi, '').trim().toLowerCase();
+          if (name) {
+            allShifts.push({
+              name,
               day,
               shiftType: '24h',
               column: col,
@@ -104,13 +125,13 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError }) => {
             });
           }
         } else {
-          // Default: 24-hour shift
+          // Default: treat as determined by column type or 24h if unknown
           allShifts.push({
             name: cell.toLowerCase(),
             day,
-            shiftType: '24h',
+            shiftType: columnType.type === 'unknown' ? '24h' : columnType.type as '24h' | '16h' | '8h',
             column: col,
-            hours: 24
+            hours: columnType.hours
           });
         }
       }
@@ -227,13 +248,14 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError }) => {
       <div className="mt-4 text-sm text-gray-600">
         <p className="font-medium mb-2">File format requirements:</p>
         <ul className="list-disc list-inside space-y-1">
-          <li>First row: Month name and column headers</li>
+          <li>First row: Month name and column headers (headers define shift types)</li>
           <li>First column: Day numbers (1-31)</li>
-          <li>Single name = 24-hour shift</li>
-          <li>name16 or name 16 = 16-hour shift (08:00-00:00)</li>
-          <li>name24 or name 24 = 24-hour shift (explicit)</li>
-          <li>name1/name2 = 12-hour split (morning/evening)</li>
-          <li>name 08-16 = 8-hour shift (08:00-16:00)</li>
+          <li>Column headers determine shift type for entire column:</li>
+          <li className="ml-6">• "yeşil24" or "24" → 24-hour shifts</li>
+          <li className="ml-6">• "yeşil16" or "16" → 16-hour shifts (08:00-00:00)</li>
+          <li className="ml-6">• "gündüz" or "08-16" → 8-hour shifts (08:00-16:00)</li>
+          <li className="ml-6">• "sarı" or "/" in header → 12-hour split shifts</li>
+          <li>Cell with "/" always creates morning/evening split (name1/name2)</li>
         </ul>
       </div>
     </div>
