@@ -9,6 +9,50 @@ interface StatisticsProps {
 const Statistics: React.FC<StatisticsProps> = ({ shiftData }) => {
   const [isRelativeMode, setIsRelativeMode] = useState(false);
 
+  // Function to generate iCalendar (.ics) file for a doctor's shifts
+  const generateCalendarFile = (doctorName: string) => {
+    const doctorShifts = shiftData.allShifts.filter(shift => shift.name === doctorName);
+    
+    let icsContent = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Shift Schedule//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:${doctorName} - ${shiftData.month} Shifts
+X-WR-TIMEZONE:UTC
+`;
+
+    doctorShifts.forEach((shift, index) => {
+      const startDate = shift.startDateTime.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+      const endDate = shift.endDateTime.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+      const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+      
+      icsContent += `BEGIN:VEVENT
+UID:shift-${doctorName}-${shift.day}-${index}@shifts-program
+DTSTAMP:${now}
+DTSTART:${startDate}
+DTEND:${endDate}
+SUMMARY:${shift.shiftType.toUpperCase()} Shift - ${shift.region}
+DESCRIPTION:Shift Type: ${shift.shiftType}\\nRegion: ${shift.region}\\nHours: ${shift.hours}h
+LOCATION:${shift.region}
+STATUS:CONFIRMED
+END:VEVENT
+`;
+    });
+
+    icsContent += 'END:VCALENDAR';
+    
+    // Create and download the .ics file
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `${doctorName.replace(/\s+/g, '_')}_${shiftData.month.replace(/\s+/g, '_')}_shifts.ics`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+  };
+
   const statistics = useMemo(() => {
     const doctorMap = new Map<string, DoctorStatistics>();
 
@@ -122,6 +166,9 @@ const Statistics: React.FC<StatisticsProps> = ({ shiftData }) => {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Days
               </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Calendar
+              </th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -167,6 +214,28 @@ const Statistics: React.FC<StatisticsProps> = ({ shiftData }) => {
                   <div className="text-sm text-gray-500 max-w-md">
                     {stat.daysList.sort((a, b) => a - b).join(', ')}
                   </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <button
+                    onClick={() => generateCalendarFile(stat.name)}
+                    className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    title="Download calendar file for all shifts"
+                  >
+                    <svg 
+                      className="w-4 h-4 mr-1.5" 
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                    >
+                      <path 
+                        strokeLinecap="round" 
+                        strokeLinejoin="round" 
+                        strokeWidth={2} 
+                        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" 
+                      />
+                    </svg>
+                    Add to Calendar
+                  </button>
                 </td>
               </tr>
             ))}
