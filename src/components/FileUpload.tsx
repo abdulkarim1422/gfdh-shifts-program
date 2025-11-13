@@ -124,45 +124,82 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError }) => {
               region
             });
           }
-        } else if (columnType.type === '16h') {
+        } else if (columnType.type === '16h' || cell.match(/16$/)) {
           // 16-hour shift: 08:00 - 00:00
-          const name = cell.replace(/\s*(16|yesil|yeşil)\s*/gi, '').trim().toLowerCase();
+          // Cell number (e.g., "uğurcan16") overrides header if present
+          const hasExplicit16 = cell.match(/16$/);
+          const name = cell.replace(/\s*(16|24|yesil|yeşil)\s*$/gi, '').trim().toLowerCase();
+          
           if (name) {
+            // If cell explicitly has "16" at the end, use 16h regardless of header
+            // Otherwise, use the column type
+            const actualShiftType = hasExplicit16 ? '16h' : columnType.type === '16h' ? '16h' : '24h';
+            const actualHours = actualShiftType === '16h' ? 16 : 24;
+            
             allShifts.push({
               name,
               day,
-              shiftType: '16h',
+              shiftType: actualShiftType as '16h' | '24h',
               column: col,
-              hours: 16,
+              hours: actualHours,
               startDateTime: createShiftDateTime(day, 8),
-              endDateTime: createShiftDateTime(day, 0, 1), // next day at 00:00
+              endDateTime: actualShiftType === '16h' 
+                ? createShiftDateTime(day, 0, 1)  // 16h: next day at 00:00
+                : createShiftDateTime(day, 8, 1), // 24h: next day at 08:00
               region
             });
           }
-        } else if (columnType.type === '24h') {
+        } else if (columnType.type === '24h' || cell.match(/24$/)) {
           // 24-hour shift: 08:00 - 08:00 next day
-          const name = cell.replace(/\s*(24|yesil|yeşil)\s*/gi, '').trim().toLowerCase();
+          // Cell number (e.g., "uğurcan24") overrides header if present
+          const hasExplicit24 = cell.match(/24$/);
+          const name = cell.replace(/\s*(16|24|yesil|yeşil)\s*$/gi, '').trim().toLowerCase();
+          
           if (name) {
+            // If cell explicitly has "24" at the end, use 24h regardless of header
+            // Otherwise, use the column type
+            const actualShiftType = hasExplicit24 ? '24h' : columnType.type === '24h' ? '24h' : '16h';
+            const actualHours = actualShiftType === '24h' ? 24 : 16;
+            
             allShifts.push({
               name,
               day,
-              shiftType: '24h',
+              shiftType: actualShiftType as '24h' | '16h',
               column: col,
-              hours: 24,
+              hours: actualHours,
               startDateTime: createShiftDateTime(day, 8),
-              endDateTime: createShiftDateTime(day, 8, 1), // next day at 08:00
+              endDateTime: actualShiftType === '24h'
+                ? createShiftDateTime(day, 8, 1)  // 24h: next day at 08:00
+                : createShiftDateTime(day, 0, 1), // 16h: next day at 00:00
               region
             });
           }
         } else {
-          // Default: treat as determined by column type
-          // If column type is 'split' but cell has no '/', treat as 24h
+          // Default: treat as determined by column type or explicit number in cell
+          // Check if cell has explicit shift duration (16 or 24) at the end
+          const hasExplicit24 = cell.match(/24$/);
+          const hasExplicit16 = cell.match(/16$/);
+          
+          // Extract clean name without the numbers
+          const cleanName = cell.replace(/\s*(16|24|yesil|yeşil)\s*$/gi, '').trim().toLowerCase();
+          
           let shiftType: '24h' | '16h' | '8h';
           let hours: number;
           let startTime: Date;
           let endTime: Date;
           
-          if (columnType.type === 'split' || columnType.type === 'unknown') {
+          // If cell has explicit number, that overrides the column header
+          if (hasExplicit24) {
+            shiftType = '24h';
+            hours = 24;
+            startTime = createShiftDateTime(day, 8);
+            endTime = createShiftDateTime(day, 8, 1);
+          } else if (hasExplicit16) {
+            shiftType = '16h';
+            hours = 16;
+            startTime = createShiftDateTime(day, 8);
+            endTime = createShiftDateTime(day, 0, 1);
+          } else if (columnType.type === 'split' || columnType.type === 'unknown') {
             // Default to 24h if column is split (but no /) or unknown
             shiftType = '24h';
             hours = 24;
@@ -185,7 +222,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError }) => {
           }
           
           allShifts.push({
-            name: cell.toLowerCase(),
+            name: cleanName,
             day,
             shiftType,
             column: col,
