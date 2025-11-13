@@ -79,6 +79,15 @@ const ShiftValidator: React.FC<ShiftValidatorProps> = ({
           s => s.name === candidateDoctor && s.day === candidateDay
         );
 
+        // CRITICAL: Check if total hours match (can only swap shifts with same total duration)
+        const problemShiftTotalHours = problemShifts.reduce((sum, s) => sum + s.hours, 0);
+        const candidateShiftTotalHours = candidateShifts.reduce((sum, s) => sum + s.hours, 0);
+        
+        if (problemShiftTotalHours !== candidateShiftTotalHours) {
+          // Skip this swap - hours don't match
+          return;
+        }
+
         // Check if swap is feasible
         const conflicts: string[] = [];
 
@@ -154,6 +163,7 @@ const ShiftValidator: React.FC<ShiftValidatorProps> = ({
         if (candidateShifts.length > 0 && conflicts.length <= 2) {
           const shiftTypes = problemShifts.map(s => s.shiftType).join(', ');
           const candidateTypes = candidateShifts.map(s => s.shiftType).join(', ');
+          const totalHours = problemShiftTotalHours;
           
           suggestions.push({
             errorIndex,
@@ -161,7 +171,7 @@ const ShiftValidator: React.FC<ShiftValidatorProps> = ({
             problemDay,
             swapWithDoctor: candidateDoctor,
             swapDay: candidateDay,
-            reasoning: `Swap ${problemDoctor}'s ${shiftTypes} shift on day ${problemDay} with ${candidateDoctor}'s ${candidateTypes} shift on day ${candidateDay}`,
+            reasoning: `Swap ${problemDoctor}'s ${shiftTypes} shift (${totalHours}h) on day ${problemDay} with ${candidateDoctor}'s ${candidateTypes} shift (${totalHours}h) on day ${candidateDay}`,
             conflicts
           });
         }
