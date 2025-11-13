@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import type { ShiftData, DoctorStatistics } from '../types/shift';
 import ExportButton from './ExportButton';
 
@@ -7,6 +7,8 @@ interface StatisticsProps {
 }
 
 const Statistics: React.FC<StatisticsProps> = ({ shiftData }) => {
+  const [isRelativeMode, setIsRelativeMode] = useState(false);
+
   const statistics = useMemo(() => {
     const doctorMap = new Map<string, DoctorStatistics>();
 
@@ -174,12 +176,24 @@ const Statistics: React.FC<StatisticsProps> = ({ shiftData }) => {
 
       {/* Distribution Chart */}
       <div className="mt-8">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">
-          Hours Distribution
-        </h3>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold text-gray-800">
+            Hours Distribution
+          </h3>
+          <button
+            onClick={() => setIsRelativeMode(!isRelativeMode)}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+          >
+            {isRelativeMode ? 'Show Absolute' : 'Show Relative'}
+          </button>
+        </div>
         <div className="space-y-3">
           {statistics.slice(0, 10).map((stat) => {
-            const percentage = totalHours > 0 ? (stat.totalHours / totalHours) * 100 : 0;
+            const maxHours = statistics[0]?.totalHours || 1;
+            const absolutePercentage = totalHours > 0 ? (stat.totalHours / totalHours) * 100 : 0;
+            const relativePercentage = maxHours > 0 ? (stat.totalHours / maxHours) * 100 : 0;
+            const displayPercentage = isRelativeMode ? relativePercentage : absolutePercentage;
+            
             return (
               <div key={stat.name}>
                 <div className="flex justify-between items-center mb-1">
@@ -187,13 +201,18 @@ const Statistics: React.FC<StatisticsProps> = ({ shiftData }) => {
                     {stat.name}
                   </span>
                   <span className="text-sm text-gray-600">
-                    {stat.totalHours}h ({percentage.toFixed(1)}%)
+                    {stat.totalHours}h ({absolutePercentage.toFixed(1)}%)
+                    {isRelativeMode && relativePercentage < 100 && (
+                      <span className="ml-2 text-blue-600">
+                        {relativePercentage.toFixed(1)}% of max
+                      </span>
+                    )}
                   </span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2.5">
                   <div
-                    className="bg-blue-600 h-2.5 rounded-full"
-                    style={{ width: `${percentage}%` }}
+                    className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+                    style={{ width: `${displayPercentage}%` }}
                   />
                 </div>
               </div>
