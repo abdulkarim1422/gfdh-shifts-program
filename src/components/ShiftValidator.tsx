@@ -101,6 +101,51 @@ const ShiftValidator: React.FC<ShiftValidatorProps> = ({
         });
       });
       
+      // Check for consecutive shifts after night duty
+      // Group shifts by doctor
+      const shiftsByDoctor = new Map<string, typeof shiftData.allShifts>();
+      shiftData.allShifts.forEach(shift => {
+        if (!shiftsByDoctor.has(shift.name)) {
+          shiftsByDoctor.set(shift.name, []);
+        }
+        shiftsByDoctor.get(shift.name)!.push(shift);
+      });
+      
+      // Check each doctor's shifts for consecutive issues
+      shiftsByDoctor.forEach((shifts, doctorName) => {
+        shifts.forEach(shift => {
+          // Check if this shift involves night duty
+          // Night duty includes: evening shifts, 24h shifts, and 16h shifts (ends at 00:00)
+          const isNightShift = shift.shiftType === 'evening' || 
+                              shift.shiftType === '24h' || 
+                              shift.shiftType === '16h';
+          
+          if (isNightShift) {
+            // Check if the doctor has any shift the next day
+            const nextDayShifts = shifts.filter(s => s.day === shift.day + 1);
+            
+            if (nextDayShifts.length > 0) {
+              const errorExists = newErrors.some(
+                e => e.day === shift.day && e.doctor === doctorName && 
+                e.message.includes('night shift') && e.message.includes(`day ${shift.day + 1}`)
+              );
+              
+              if (!errorExists) {
+                const shiftTypeLabel = shift.shiftType === 'evening' ? 'evening' : 
+                                      shift.shiftType === '16h' ? '16-hour' : '24-hour';
+                newErrors.push({
+                  type: 'overlap',
+                  message: `Doctor "${doctorName}" has a ${shiftTypeLabel} shift on day ${shift.day} (night duty) and another shift on day ${shift.day + 1}. No one should work after night shift.`,
+                  day: shift.day,
+                  doctor: doctorName,
+                  severity: 'error'
+                });
+              }
+            }
+          }
+        });
+      });
+      
       // Remove duplicate errors
       const uniqueErrors = Array.from(
         new Map(newErrors.map(e => [
