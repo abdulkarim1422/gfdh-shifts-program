@@ -1,34 +1,46 @@
 import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
 import './App.css'
+import FileUpload from './components/FileUpload'
+import ShiftValidator from './components/ShiftValidator'
+import Statistics from './components/Statistics'
+import CalendarView from './components/CalendarView'
+import type { ShiftData, ValidationError } from './types/shift'
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [shiftData, setShiftData] = useState<ShiftData | null>(null)
+  const [errors, setErrors] = useState<ValidationError[]>([])
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+    <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100">
+      <div className="container mx-auto px-4 py-8">
+        <header className="text-center mb-12">
+          <h1 className="text-4xl font-bold text-gray-800 mb-2">
+            Hospital Shift Management System
+          </h1>
+          <p className="text-gray-600">
+            Upload, validate, and analyze monthly doctor shift schedules
+          </p>
+        </header>
+
+        <div className="max-w-6xl mx-auto space-y-8">
+          <FileUpload onDataLoaded={setShiftData} onError={setErrors} />
+          
+          {shiftData && (
+            <>
+              <ShiftValidator 
+                shiftData={shiftData} 
+                errors={errors}
+                onErrorsUpdate={setErrors}
+              />
+              
+              <CalendarView shiftData={shiftData} />
+              
+              <Statistics shiftData={shiftData} />
+            </>
+          )}
+        </div>
       </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
+    </div>
   )
 }
 
