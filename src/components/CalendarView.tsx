@@ -71,7 +71,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ shiftData }) => {
                   Day {day}
                 </span>
                 <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                  {dayShifts.length} shifts
+                  {dayShifts.length} doctors
                 </span>
               </div>
 
@@ -88,9 +88,9 @@ const CalendarView: React.FC<CalendarViewProps> = ({ shiftData }) => {
                   } else if (shiftTypes.includes('morning') && shiftTypes.includes('evening')) {
                     shiftLabel = 'Full';
                   } else if (shiftTypes.includes('morning')) {
-                    shiftLabel = 'AM';
+                    shiftLabel = '12 (sabah)';
                   } else if (shiftTypes.includes('evening')) {
-                    shiftLabel = 'PM';
+                    shiftLabel = '12 (gece)';
                   } else if (shiftTypes.includes('8h')) {
                     shiftLabel = '8h';
                   }
