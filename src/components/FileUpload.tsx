@@ -71,8 +71,8 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError }) => {
         // Get the shift type from column header
         const columnType = columnShiftTypes[col] || { type: 'unknown', hours: 24 };
         
-        // Check if it's a split shift (morning/evening) based on cell or column
-        if (cell.includes('/') || columnType.type === 'split') {
+        // Check if it's a split shift - ONLY if cell actually contains "/"
+        if (cell.includes('/')) {
           const [name1, name2] = cell.split('/').map(n => n.trim());
           
           if (name1) {
@@ -143,16 +143,43 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError }) => {
             });
           }
         } else {
-          // Default: treat as determined by column type or 24h if unknown
-          const shiftType = columnType.type === 'unknown' ? '24h' : columnType.type as '24h' | '16h' | '8h';
+          // Default: treat as determined by column type
+          // If column type is 'split' but cell has no '/', treat as 24h
+          let shiftType: '24h' | '16h' | '8h';
+          let hours: number;
+          let startTime: Date;
+          let endTime: Date;
+          
+          if (columnType.type === 'split' || columnType.type === 'unknown') {
+            // Default to 24h if column is split (but no /) or unknown
+            shiftType = '24h';
+            hours = 24;
+            startTime = createShiftDateTime(day, 8);
+            endTime = createShiftDateTime(day, 8, 1);
+          } else {
+            shiftType = columnType.type as '24h' | '16h' | '8h';
+            hours = columnType.hours;
+            
+            if (shiftType === '16h') {
+              startTime = createShiftDateTime(day, 8);
+              endTime = createShiftDateTime(day, 0, 1);
+            } else if (shiftType === '8h') {
+              startTime = createShiftDateTime(day, 8);
+              endTime = createShiftDateTime(day, 16);
+            } else {
+              startTime = createShiftDateTime(day, 8);
+              endTime = createShiftDateTime(day, 8, 1);
+            }
+          }
+          
           allShifts.push({
             name: cell.toLowerCase(),
             day,
             shiftType,
             column: col,
-            hours: columnType.hours,
-            startDateTime: createShiftDateTime(day, 8),
-            endDateTime: createShiftDateTime(day, 8, 1) // assume 24h default
+            hours,
+            startDateTime: startTime,
+            endDateTime: endTime
           });
         }
       }
