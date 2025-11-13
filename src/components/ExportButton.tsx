@@ -38,21 +38,28 @@ const ExportButton: React.FC<ExportButtonProps> = ({ shiftData, statistics }) =>
     const scheduleData = [
       ['Daily Schedule - ' + shiftData.month],
       [],
-      ['Day', 'Doctor', 'Shift Type']
+      ['Day', 'Doctor', 'Shift Type', 'Region', 'Hours', 'Start Time', 'End Time']
     ];
 
     days.forEach(day => {
       const dayShifts = shiftData.allShifts.filter(s => s.day === day);
       if (dayShifts.length > 0) {
         dayShifts.forEach((shift, idx) => {
+          const startTime = shift.startDateTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+          const endTime = shift.endDateTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+          
           scheduleData.push([
             idx === 0 ? String(day) : '',
             shift.name,
-            shift.shiftType
+            shift.shiftType,
+            shift.region || '-',
+            String(shift.hours),
+            startTime,
+            endTime
           ]);
         });
       } else {
-        scheduleData.push([String(day), 'No shifts', '']);
+        scheduleData.push([String(day), 'No shifts', '', '', '', '', '']);
       }
     });
 

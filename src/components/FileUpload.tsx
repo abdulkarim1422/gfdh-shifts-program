@@ -21,21 +21,22 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError }) => {
     };
     
     // Parse column headers to determine shift types
-    const columnShiftTypes: Array<{type: 'split' | '24h' | '16h' | '8h' | 'unknown', hours: number}> = [];
+    const columnShiftTypes: Array<{type: 'split' | '24h' | '16h' | '8h' | 'unknown', hours: number, region: string}> = [];
     headers.forEach((header, index) => {
       const h = header?.toLowerCase().trim() || '';
+      const originalHeader = header?.trim() || '';
       
       if (h.includes('24') || h.includes('yirmi dört')) {
-        columnShiftTypes[index] = { type: '24h', hours: 24 };
+        columnShiftTypes[index] = { type: '24h', hours: 24, region: originalHeader };
       } else if (h.includes('16') || h.includes('on altı')) {
-        columnShiftTypes[index] = { type: '16h', hours: 16 };
+        columnShiftTypes[index] = { type: '16h', hours: 16, region: originalHeader };
       } else if (h.includes('gündüz') || h.includes('08-16') || h.includes('8-16')) {
-        columnShiftTypes[index] = { type: '8h', hours: 8 };
+        columnShiftTypes[index] = { type: '8h', hours: 8, region: originalHeader };
       } else if (h.includes('/') || h.includes('sarı') || h.includes('müs')) {
         // Split shift columns (morning/evening)
-        columnShiftTypes[index] = { type: 'split', hours: 12 };
+        columnShiftTypes[index] = { type: 'split', hours: 12, region: originalHeader };
       } else {
-        columnShiftTypes[index] = { type: 'unknown', hours: 24 }; // default to 24h
+        columnShiftTypes[index] = { type: 'unknown', hours: 24, region: originalHeader }; // default to 24h
       }
     });
     
@@ -69,7 +70,8 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError }) => {
         shifts.push(cell);
         
         // Get the shift type from column header
-        const columnType = columnShiftTypes[col] || { type: 'unknown', hours: 24 };
+        const columnType = columnShiftTypes[col] || { type: 'unknown', hours: 24, region: '' };
+        const region = columnType.region;
         
         // Check if it's a split shift - ONLY if cell actually contains "/"
         if (cell.includes('/')) {
@@ -84,7 +86,8 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError }) => {
               column: col,
               hours: 12,
               startDateTime: createShiftDateTime(day, 8),
-              endDateTime: createShiftDateTime(day, 20)
+              endDateTime: createShiftDateTime(day, 20),
+              region
             });
           }
           
@@ -97,7 +100,8 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError }) => {
               column: col,
               hours: 12,
               startDateTime: createShiftDateTime(day, 20),
-              endDateTime: createShiftDateTime(day, 8, 1) // next day at 08:00
+              endDateTime: createShiftDateTime(day, 8, 1), // next day at 08:00
+              region
             });
           }
         } else if (cell.match(/08-16/i) || columnType.type === '8h') {
@@ -111,7 +115,8 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError }) => {
               column: col,
               hours: 8,
               startDateTime: createShiftDateTime(day, 8),
-              endDateTime: createShiftDateTime(day, 16)
+              endDateTime: createShiftDateTime(day, 16),
+              region
             });
           }
         } else if (columnType.type === '16h') {
@@ -125,7 +130,8 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError }) => {
               column: col,
               hours: 16,
               startDateTime: createShiftDateTime(day, 8),
-              endDateTime: createShiftDateTime(day, 0, 1) // next day at 00:00
+              endDateTime: createShiftDateTime(day, 0, 1), // next day at 00:00
+              region
             });
           }
         } else if (columnType.type === '24h') {
@@ -139,7 +145,8 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError }) => {
               column: col,
               hours: 24,
               startDateTime: createShiftDateTime(day, 8),
-              endDateTime: createShiftDateTime(day, 8, 1) // next day at 08:00
+              endDateTime: createShiftDateTime(day, 8, 1), // next day at 08:00
+              region
             });
           }
         } else {
@@ -179,7 +186,8 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError }) => {
             column: col,
             hours,
             startDateTime: startTime,
-            endDateTime: endTime
+            endDateTime: endTime,
+            region
           });
         }
       }

@@ -11,6 +11,7 @@ export interface DoctorShift {
   hours: number; // Total hours for this shift
   startDateTime: Date; // Actual start date and time
   endDateTime: Date; // Actual end date and time
+  region: string; // Region/area of work (e.g., "st", "sarı+müs", "yeşil 24")
 }
 
 export interface ShiftData {

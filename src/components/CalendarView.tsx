@@ -78,6 +78,8 @@ const CalendarView: React.FC<CalendarViewProps> = ({ shiftData }) => {
               <div className="space-y-1.5">
                 {Array.from(doctorShifts.entries()).map(([doctorName, shifts]) => {
                   const shiftTypes = shifts.map(s => s.shiftType);
+                  const regions = [...new Set(shifts.map(s => s.region).filter(r => r))];
+                  const regionLabel = regions.length > 0 ? regions.join(', ') : '';
                   const colorClass = doctorColors.get(doctorName) || 'bg-gray-100 text-gray-800';
                   
                   let shiftLabel = '';
@@ -100,9 +102,16 @@ const CalendarView: React.FC<CalendarViewProps> = ({ shiftData }) => {
                       key={doctorName}
                       className={`px-2 py-1 rounded text-xs font-medium ${colorClass}`}
                     >
-                      <div className="flex justify-between items-center">
+                      <div className="flex justify-between items-center gap-1">
                         <span className="capitalize truncate">{doctorName}</span>
-                        <span className="ml-1 font-bold">{shiftLabel}</span>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {regionLabel && (
+                            <span className="text-[10px] opacity-75 truncate max-w-[60px]" title={regionLabel}>
+                              [{regionLabel}]
+                            </span>
+                          )}
+                          <span className="font-bold">{shiftLabel}</span>
+                        </div>
                       </div>
                     </div>
                   );
