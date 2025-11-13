@@ -1,5 +1,15 @@
-import React, { useEffect } from 'react';
-import type { ShiftData, ValidationError } from '../types/shift';
+import React, { useEffect, useState } from 'react';
+import type { ShiftData, ValidationError, DoctorShift } from '../types/shift';
+
+interface SwapSuggestion {
+  errorIndex: number;
+  problemDoctor: string;
+  problemDay: number;
+  swapWithDoctor: string;
+  swapDay: number;
+  reasoning: string;
+  conflicts: string[];
+}
 
 interface ShiftValidatorProps {
   shiftData: ShiftData;
@@ -12,6 +22,176 @@ const ShiftValidator: React.FC<ShiftValidatorProps> = ({
   errors, 
   onErrorsUpdate 
 }) => {
+  const [selectedError, setSelectedError] = useState<number | null>(null);
+  const [suggestions, setSuggestions] = useState<SwapSuggestion[]>([]);
+  const [filterDays, setFilterDays] = useState<string>('');
+  const [filterDoctor, setFilterDoctor] = useState<string>('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  const findSwapSuggestions = (errorIndex: number, error: ValidationError): SwapSuggestion[] => {
+    if (!error.doctor || !error.day) return [];
+
+    const suggestions: SwapSuggestion[] = [];
+    const problemDoctor = error.doctor;
+    const problemDay = error.day;
+
+    // Get all shifts for the problem doctor on the problem day
+    const problemShifts = shiftData.allShifts.filter(
+      s => s.name === problemDoctor && s.day === problemDay
+    );
+
+    if (problemShifts.length === 0) return [];
+
+    // Determine which days to search (either filtered or all)
+    let daysToSearch: number[] = [];
+    if (filterDays) {
+      const ranges = filterDays.split(',').map(s => s.trim());
+      ranges.forEach(range => {
+        if (range.includes('-')) {
+          const [start, end] = range.split('-').map(n => parseInt(n.trim()));
+          for (let d = start; d <= end; d++) {
+            if (!daysToSearch.includes(d)) daysToSearch.push(d);
+          }
+        } else {
+          const day = parseInt(range);
+          if (!isNaN(day) && !daysToSearch.includes(day)) {
+            daysToSearch.push(day);
+          }
+        }
+      });
+    } else {
+      // Search all days except the problem day
+      const allDays = Array.from(new Set(shiftData.allShifts.map(s => s.day)));
+      daysToSearch = allDays.filter(d => d !== problemDay);
+    }
+
+    // Get all unique doctors
+    const allDoctors = Array.from(new Set(shiftData.allShifts.map(s => s.name)));
+    const doctorsToConsider = filterDoctor 
+      ? allDoctors.filter(d => d.toLowerCase().includes(filterDoctor.toLowerCase()))
+      : allDoctors.filter(d => d !== problemDoctor);
+
+    // For each potential swap candidate
+    doctorsToConsider.forEach(candidateDoctor => {
+      daysToSearch.forEach(candidateDay => {
+        // Get shifts for candidate doctor on candidate day
+        const candidateShifts = shiftData.allShifts.filter(
+          s => s.name === candidateDoctor && s.day === candidateDay
+        );
+
+        // Check if swap is feasible
+        const conflicts: string[] = [];
+
+        // Check if problem doctor would have conflicts on candidate day
+        const problemDoctorOnCandidateDay = shiftData.allShifts.filter(
+          s => s.name === problemDoctor && s.day === candidateDay
+        );
+        
+        if (problemDoctorOnCandidateDay.length > 0) {
+          // Check time conflicts
+          candidateShifts.forEach(candShift => {
+            problemDoctorOnCandidateDay.forEach(existingShift => {
+              if (shiftsOverlap(candShift, existingShift)) {
+                conflicts.push(`${problemDoctor} already has ${existingShift.shiftType} shift on day ${candidateDay}`);
+              }
+            });
+          });
+        }
+
+        // Check if candidate doctor would have conflicts on problem day
+        const candidateDoctorOnProblemDay = shiftData.allShifts.filter(
+          s => s.name === candidateDoctor && s.day === problemDay
+        );
+        
+        if (candidateDoctorOnProblemDay.length > 0) {
+          problemShifts.forEach(probShift => {
+            candidateDoctorOnProblemDay.forEach(existingShift => {
+              if (shiftsOverlap(probShift, existingShift)) {
+                conflicts.push(`${candidateDoctor} already has ${existingShift.shiftType} shift on day ${problemDay}`);
+              }
+            });
+          });
+        }
+
+        // Check rest time violations for problem doctor
+        const problemDoctorAllShifts = shiftData.allShifts
+          .filter(s => s.name === problemDoctor)
+          .sort((a, b) => a.startDateTime.getTime() - b.startDateTime.getTime());
+
+        // Simulate the swap and check rest times
+        const simulatedShifts = problemDoctorAllShifts
+          .filter(s => !(s.day === problemDay && problemShifts.some(ps => ps.column === s.column)))
+          .concat(candidateShifts.map(cs => ({ ...cs, name: problemDoctor, day: candidateDay })))
+          .sort((a, b) => a.startDateTime.getTime() - b.startDateTime.getTime());
+
+        for (let i = 0; i < simulatedShifts.length - 1; i++) {
+          const restTime = (simulatedShifts[i + 1].startDateTime.getTime() - 
+                           simulatedShifts[i].endDateTime.getTime()) / (1000 * 60 * 60);
+          if (restTime < 8) {
+            conflicts.push(`${problemDoctor} would have insufficient rest (${restTime.toFixed(1)}h) between day ${simulatedShifts[i].day} and ${simulatedShifts[i + 1].day}`);
+          }
+        }
+
+        // Check rest time for candidate doctor
+        const candidateDoctorAllShifts = shiftData.allShifts
+          .filter(s => s.name === candidateDoctor)
+          .sort((a, b) => a.startDateTime.getTime() - b.startDateTime.getTime());
+
+        const simulatedCandidateShifts = candidateDoctorAllShifts
+          .filter(s => !(s.day === candidateDay && candidateShifts.some(cs => cs.column === s.column)))
+          .concat(problemShifts.map(ps => ({ ...ps, name: candidateDoctor, day: problemDay })))
+          .sort((a, b) => a.startDateTime.getTime() - b.startDateTime.getTime());
+
+        for (let i = 0; i < simulatedCandidateShifts.length - 1; i++) {
+          const restTime = (simulatedCandidateShifts[i + 1].startDateTime.getTime() - 
+                           simulatedCandidateShifts[i].endDateTime.getTime()) / (1000 * 60 * 60);
+          if (restTime < 8) {
+            conflicts.push(`${candidateDoctor} would have insufficient rest (${restTime.toFixed(1)}h) between day ${simulatedCandidateShifts[i].day} and ${simulatedCandidateShifts[i + 1].day}`);
+          }
+        }
+
+        // Only suggest if there are shifts to swap and not too many conflicts
+        if (candidateShifts.length > 0 && conflicts.length <= 2) {
+          const shiftTypes = problemShifts.map(s => s.shiftType).join(', ');
+          const candidateTypes = candidateShifts.map(s => s.shiftType).join(', ');
+          
+          suggestions.push({
+            errorIndex,
+            problemDoctor,
+            problemDay,
+            swapWithDoctor: candidateDoctor,
+            swapDay: candidateDay,
+            reasoning: `Swap ${problemDoctor}'s ${shiftTypes} shift on day ${problemDay} with ${candidateDoctor}'s ${candidateTypes} shift on day ${candidateDay}`,
+            conflicts
+          });
+        }
+      });
+    });
+
+    // Sort by number of conflicts (fewer is better)
+    return suggestions.sort((a, b) => a.conflicts.length - b.conflicts.length).slice(0, 10);
+  };
+
+  const shiftsOverlap = (shift1: DoctorShift, shift2: DoctorShift): boolean => {
+    if (shift1.shiftType === '24h' || shift2.shiftType === '24h') return true;
+    if (shift1.shiftType === shift2.shiftType && 
+        (shift1.shiftType === 'morning' || shift1.shiftType === 'evening')) return true;
+    return false;
+  };
+
+  const handleGenerateSuggestions = (errorIndex: number) => {
+    if (selectedError === errorIndex && showSuggestions) {
+      setShowSuggestions(false);
+      setSelectedError(null);
+    } else {
+      setSelectedError(errorIndex);
+      const error = errors[errorIndex];
+      const newSuggestions = findSwapSuggestions(errorIndex, error);
+      setSuggestions(newSuggestions);
+      setShowSuggestions(true);
+    }
+  };
+
   useEffect(() => {
     const validateShifts = () => {
       const newErrors: ValidationError[] = [];
@@ -218,46 +398,159 @@ const ShiftValidator: React.FC<ShiftValidatorProps> = ({
 
       <div className="space-y-3">
         {errors.map((error, index) => (
-          <div
-            key={index}
-            className={`p-4 rounded-lg border-l-4 ${
-              error.severity === 'error'
-                ? 'bg-red-50 border-red-500'
-                : 'bg-yellow-50 border-yellow-500'
-            }`}
-          >
-            <div className="flex items-start">
-              <svg
-                className={`w-5 h-5 mr-3 mt-0.5 ${
-                  error.severity === 'error' ? 'text-red-500' : 'text-yellow-500'
-                }`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                />
-              </svg>
-              <div className="flex-1">
-                <p className={`font-medium ${
-                  error.severity === 'error' ? 'text-red-800' : 'text-yellow-800'
-                }`}>
-                  {error.message}
-                </p>
-                {error.day && (
-                  <p className={`text-sm mt-1 ${
-                    error.severity === 'error' ? 'text-red-600' : 'text-yellow-600'
+          <div key={index}>
+            <div
+              className={`p-4 rounded-lg border-l-4 ${
+                error.severity === 'error'
+                  ? 'bg-red-50 border-red-500'
+                  : 'bg-yellow-50 border-yellow-500'
+              }`}
+            >
+              <div className="flex items-start">
+                <svg
+                  className={`w-5 h-5 mr-3 mt-0.5 ${
+                    error.severity === 'error' ? 'text-red-500' : 'text-yellow-500'
+                  }`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                  />
+                </svg>
+                <div className="flex-1">
+                  <p className={`font-medium ${
+                    error.severity === 'error' ? 'text-red-800' : 'text-yellow-800'
                   }`}>
-                    Day: {error.day}
-                    {error.doctor && ` • Doctor: ${error.doctor}`}
+                    {error.message}
                   </p>
-                )}
+                  {error.day && (
+                    <p className={`text-sm mt-1 ${
+                      error.severity === 'error' ? 'text-red-600' : 'text-yellow-600'
+                    }`}>
+                      Day: {error.day}
+                      {error.doctor && ` • Doctor: ${error.doctor}`}
+                    </p>
+                  )}
+                  {error.doctor && error.day && (
+                    <button
+                      onClick={() => handleGenerateSuggestions(index)}
+                      className="mt-2 text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded transition-colors"
+                    >
+                      {selectedError === index && showSuggestions ? 'Hide Solutions' : 'Suggest Solutions'}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
+
+            {/* Solution Suggestions Panel */}
+            {selectedError === index && showSuggestions && (
+              <div className="mt-3 ml-8 bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="font-semibold text-blue-900 mb-3">Solution Suggestions</h4>
+                
+                {/* Filters */}
+                <div className="mb-4 space-y-2">
+                  <div className="flex gap-3">
+                    <div className="flex-1">
+                      <label className="block text-xs font-medium text-blue-800 mb-1">
+                        Filter by Days (e.g., "1-5" or "3,7,10")
+                      </label>
+                      <input
+                        type="text"
+                        value={filterDays}
+                        onChange={(e) => setFilterDays(e.target.value)}
+                        placeholder="e.g., 1-10 or 5,10,15"
+                        className="w-full px-3 py-1.5 text-sm border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-xs font-medium text-blue-800 mb-1">
+                        Filter by Doctor Name
+                      </label>
+                      <input
+                        type="text"
+                        value={filterDoctor}
+                        onChange={(e) => setFilterDoctor(e.target.value)}
+                        placeholder="e.g., john"
+                        className="w-full px-3 py-1.5 text-sm border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <button
+                        onClick={() => {
+                          const newSuggestions = findSwapSuggestions(index, error);
+                          setSuggestions(newSuggestions);
+                        }}
+                        className="px-4 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+                      >
+                        Apply Filters
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Suggestions List */}
+                {suggestions.length === 0 ? (
+                  <p className="text-sm text-blue-700">
+                    No viable swap suggestions found. Try adjusting the filters or this conflict may require manual resolution.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {suggestions.map((suggestion, sIndex) => (
+                      <div
+                        key={sIndex}
+                        className={`p-3 rounded border ${
+                          suggestion.conflicts.length === 0
+                            ? 'bg-green-50 border-green-300'
+                            : 'bg-yellow-50 border-yellow-300'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-900">
+                              {suggestion.reasoning}
+                            </p>
+                            {suggestion.conflicts.length > 0 && (
+                              <div className="mt-2">
+                                <p className="text-xs font-medium text-yellow-800 mb-1">
+                                  ⚠️ Potential Issues:
+                                </p>
+                                <ul className="text-xs text-yellow-700 space-y-0.5 ml-4">
+                                  {suggestion.conflicts.map((conflict, cIndex) => (
+                                    <li key={cIndex}>• {conflict}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            {suggestion.conflicts.length === 0 && (
+                              <p className="text-xs text-green-700 mt-1">
+                                ✓ No conflicts detected - Safe to swap
+                              </p>
+                            )}
+                          </div>
+                          <div className="ml-3">
+                            {suggestion.conflicts.length === 0 ? (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                Recommended
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                Caution
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ))}
       </div>
