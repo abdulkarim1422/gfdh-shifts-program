@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
 import type { ShiftData, ValidationError, DoctorShift } from '../types/shift';
@@ -9,6 +9,9 @@ interface FileUploadProps {
 }
 
 const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError }) => {
+  const [workbook, setWorkbook] = useState<XLSX.WorkBook | null>(null);
+  const [selectedSheet, setSelectedSheet] = useState<string>('');
+
   const parseShiftData = (rows: string[][]): ShiftData => {
     // First row contains month and column headers
     const month = rows[0]?.[0] || 'Unknown';
@@ -198,6 +201,32 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError }) => {
     return { month, entries, allShifts };
   };
 
+  const processWorkbookSheet = useCallback((wb: XLSX.WorkBook, sheetName: string) => {
+    try {
+      const sheet = wb.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as string[][];
+      
+      const shiftData = parseShiftData(rows);
+      onDataLoaded(shiftData);
+      onError([]);
+    } catch (err) {
+      onError([{
+        type: 'format',
+        message: `Error parsing sheet: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        severity: 'error'
+      }]);
+    }
+  }, [onDataLoaded, onError]);
+
+  const handleSheetSelection = useCallback((event: React.ChangeEvent<HTMLSelectElement>) => {
+    const sheetName = event.target.value;
+    setSelectedSheet(sheetName);
+    
+    if (workbook && sheetName) {
+      processWorkbookSheet(workbook, sheetName);
+    }
+  }, [workbook, processWorkbookSheet]);
+
   const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -234,13 +263,21 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError }) => {
       reader.onload = (e) => {
         try {
           const data = new Uint8Array(e.target?.result as ArrayBuffer);
-          const workbook = XLSX.read(data, { type: 'array' });
-          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-          const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1 }) as string[][];
+          const wb = XLSX.read(data, { type: 'array' });
           
-          const shiftData = parseShiftData(rows);
-          onDataLoaded(shiftData);
-          onError([]);
+          // Store workbook for later use
+          setWorkbook(wb);
+          
+          // If multiple sheets, let user choose; otherwise process first sheet
+          if (wb.SheetNames.length > 1) {
+            setSelectedSheet(wb.SheetNames[0]);
+            // Process first sheet by default
+            processWorkbookSheet(wb, wb.SheetNames[0]);
+          } else {
+            // Single sheet - process immediately
+            setSelectedSheet(wb.SheetNames[0]);
+            processWorkbookSheet(wb, wb.SheetNames[0]);
+          }
         } catch (err) {
           onError([{
             type: 'format',
@@ -260,7 +297,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError }) => {
 
     // Reset input
     event.target.value = '';
-  }, [onDataLoaded, onError]);
+  }, [onDataLoaded, onError, processWorkbookSheet]);
 
   return (
     <div className="bg-white rounded-lg shadow-lg p-6">
@@ -300,6 +337,30 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError }) => {
           onChange={handleFileUpload}
         />
       </div>
+
+      {/* Sheet Selector - shown when workbook has multiple sheets */}
+      {workbook && workbook.SheetNames.length > 1 && (
+        <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <label htmlFor="sheet-select" className="block text-sm font-medium text-gray-700 mb-2">
+            Select Sheet/Page:
+          </label>
+          <select
+            id="sheet-select"
+            value={selectedSheet}
+            onChange={handleSheetSelection}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+          >
+            {workbook.SheetNames.map((sheetName) => (
+              <option key={sheetName} value={sheetName}>
+                {sheetName}
+              </option>
+            ))}
+          </select>
+          <p className="mt-2 text-xs text-gray-600">
+            This file contains {workbook.SheetNames.length} sheets. Select which one to process.
+          </p>
+        </div>
+      )}
 
       <div className="mt-4 text-sm text-gray-600">
         <p className="font-medium mb-2">File format requirements:</p>
