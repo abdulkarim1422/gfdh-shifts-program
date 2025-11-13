@@ -83,13 +83,15 @@ const CalendarView: React.FC<CalendarViewProps> = ({ shiftData }) => {
                   let shiftLabel = '';
                   if (shiftTypes.includes('24h')) {
                     shiftLabel = '24h';
+                  } else if (shiftTypes.includes('16h')) {
+                    shiftLabel = '16h';
                   } else if (shiftTypes.includes('morning') && shiftTypes.includes('evening')) {
                     shiftLabel = 'Full';
                   } else if (shiftTypes.includes('morning')) {
                     shiftLabel = 'AM';
                   } else if (shiftTypes.includes('evening')) {
                     shiftLabel = 'PM';
-                  } else if (shiftTypes.includes('8-16')) {
+                  } else if (shiftTypes.includes('8h')) {
                     shiftLabel = '8h';
                   }
 
@@ -125,6 +127,9 @@ const CalendarView: React.FC<CalendarViewProps> = ({ shiftData }) => {
             <span className="font-bold">24h</span> = 24-hour shift
           </div>
           <div className="text-xs bg-gray-100 px-2 py-1 rounded">
+            <span className="font-bold">16h</span> = 16-hour shift (08:00-00:00)
+          </div>
+          <div className="text-xs bg-gray-100 px-2 py-1 rounded">
             <span className="font-bold">Full</span> = Morning + Evening (24h split)
           </div>
           <div className="text-xs bg-gray-100 px-2 py-1 rounded">
@@ -134,7 +139,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ shiftData }) => {
             <span className="font-bold">PM</span> = Evening (12h)
           </div>
           <div className="text-xs bg-gray-100 px-2 py-1 rounded">
-            <span className="font-bold">8h</span> = 8-hour shift (08-16)
+            <span className="font-bold">8h</span> = 8-hour shift (08:00-16:00)
           </div>
         </div>
       </div>

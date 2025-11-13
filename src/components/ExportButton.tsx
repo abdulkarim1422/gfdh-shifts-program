@@ -16,12 +16,13 @@ const ExportButton: React.FC<ExportButtonProps> = ({ shiftData, statistics }) =>
     const statsData = [
       ['Doctor Statistics - ' + shiftData.month],
       [],
-      ['Doctor', 'Total Days', 'Total Hours', '24h Shifts', '12h Shifts', '8h Shifts', 'Days Worked'],
+      ['Doctor', 'Total Days', 'Total Hours', '24h Shifts', '16h Shifts', '12h Shifts', '8h Shifts', 'Days Worked'],
       ...statistics.map(stat => [
         stat.name,
         stat.totalDays,
         stat.totalHours,
         stat.shifts24h,
+        stat.shifts16h,
         stat.shifts12h,
         stat.shifts8h,
         stat.daysList.sort((a, b) => a - b).join(', ')
@@ -75,6 +76,7 @@ const ExportButton: React.FC<ExportButtonProps> = ({ shiftData, statistics }) =>
       [],
       ['Shift Type Distribution'],
       ['24-hour Shifts', statistics.reduce((sum, s) => sum + s.shifts24h, 0)],
+      ['16-hour Shifts', statistics.reduce((sum, s) => sum + s.shifts16h, 0)],
       ['12-hour Shifts', statistics.reduce((sum, s) => sum + s.shifts12h, 0)],
       ['8-hour Shifts', statistics.reduce((sum, s) => sum + s.shifts8h, 0)]
     ];

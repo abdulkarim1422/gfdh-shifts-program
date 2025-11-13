@@ -6,8 +6,9 @@ export interface ShiftEntry {
 export interface DoctorShift {
   name: string;
   day: number;
-  shiftType: '24h' | 'morning' | 'evening' | '8-16';
+  shiftType: '24h' | 'morning' | 'evening' | '16h' | '8h';
   column: number;
+  hours: number; // Total hours for this shift
 }
 
 export interface ShiftData {
@@ -30,6 +31,7 @@ export interface DoctorStatistics {
   totalHours: number;
   shifts24h: number;
   shifts12h: number;
+  shifts16h: number;
   shifts8h: number;
   daysList: number[];
 }

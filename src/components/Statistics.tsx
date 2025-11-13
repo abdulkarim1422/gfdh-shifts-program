@@ -18,6 +18,7 @@ const Statistics: React.FC<StatisticsProps> = ({ shiftData }) => {
           totalHours: 0,
           shifts24h: 0,
           shifts12h: 0,
+          shifts16h: 0,
           shifts8h: 0,
           daysList: []
         });
@@ -31,19 +32,21 @@ const Statistics: React.FC<StatisticsProps> = ({ shiftData }) => {
         stats.totalDays++;
       }
 
-      // Calculate hours based on shift type
+      // Calculate hours based on shift type (use the hours field from shift)
+      stats.totalHours += shift.hours;
+      
       switch (shift.shiftType) {
         case '24h':
-          stats.totalHours += 24;
           stats.shifts24h++;
           break;
         case 'morning':
         case 'evening':
-          stats.totalHours += 12;
           stats.shifts12h++;
           break;
-        case '8-16':
-          stats.totalHours += 8;
+        case '16h':
+          stats.shifts16h++;
+          break;
+        case '8h':
           stats.shifts8h++;
           break;
       }
@@ -106,6 +109,9 @@ const Statistics: React.FC<StatisticsProps> = ({ shiftData }) => {
                 24h Shifts
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                16h Shifts
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 12h Shifts
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -138,6 +144,11 @@ const Statistics: React.FC<StatisticsProps> = ({ shiftData }) => {
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
                     {stat.shifts24h}
+                  </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-purple-100 text-purple-800">
+                    {stat.shifts16h}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
