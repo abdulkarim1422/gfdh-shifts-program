@@ -115,10 +115,10 @@ const ShiftValidator: React.FC<ShiftValidatorProps> = ({
       shiftsByDoctor.forEach((shifts, doctorName) => {
         shifts.forEach(shift => {
           // Check if this shift involves night duty
-          // Night duty includes: evening shifts, 24h shifts, and 16h shifts (ends at 00:00)
+          // Night duty ONLY includes: evening shifts (night portion of split) and 24h shifts
+          // 16h shifts (08:00-00:00) are NOT night duty - they end at midnight
           const isNightShift = shift.shiftType === 'evening' || 
-                              shift.shiftType === '24h' || 
-                              shift.shiftType === '16h';
+                              shift.shiftType === '24h';
           
           if (isNightShift) {
             // Check if the doctor has any shift the next day
@@ -131,8 +131,7 @@ const ShiftValidator: React.FC<ShiftValidatorProps> = ({
               );
               
               if (!errorExists) {
-                const shiftTypeLabel = shift.shiftType === 'evening' ? 'evening' : 
-                                      shift.shiftType === '16h' ? '16-hour' : '24-hour';
+                const shiftTypeLabel = shift.shiftType === 'evening' ? 'evening' : '24-hour';
                 newErrors.push({
                   type: 'overlap',
                   message: `Doctor "${doctorName}" has a ${shiftTypeLabel} shift on day ${shift.day} (night duty) and another shift on day ${shift.day + 1}. No one should work after night shift.`,
