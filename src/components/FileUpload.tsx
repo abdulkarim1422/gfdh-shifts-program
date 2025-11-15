@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
 import type { ShiftData, ValidationError, DoctorShift } from '../types/shift';
@@ -6,11 +6,13 @@ import type { ShiftData, ValidationError, DoctorShift } from '../types/shift';
 interface FileUploadProps {
   onDataLoaded: (data: ShiftData) => void;
   onError: (errors: ValidationError[]) => void;
+  urlFile?: { filename: string; page?: string } | null;
 }
 
-const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError }) => {
+const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError, urlFile }) => {
   const [workbook, setWorkbook] = useState<XLSX.WorkBook | null>(null);
   const [selectedSheet, setSelectedSheet] = useState<string>('');
+  const [isLoadingUrl, setIsLoadingUrl] = useState<boolean>(false);
 
   const parseShiftData = (rows: string[][]): ShiftData => {
     // First row contains month and column headers
@@ -309,6 +311,67 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError }) => {
     }
   }, [onDataLoaded, onError]);
 
+  // Load file from URL
+  const loadFileFromUrl = useCallback(async (filename: string, sheetName?: string) => {
+    setIsLoadingUrl(true);
+    try {
+      const fileUrl = `/shifts/${filename}`;
+      const response = await fetch(fileUrl);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to load file: ${response.statusText}`);
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      const data = new Uint8Array(arrayBuffer);
+      
+      // Check file extension
+      const fileExtension = filename.split('.').pop()?.toLowerCase();
+
+      if (fileExtension === 'csv') {
+        // Parse CSV
+        const text = new TextDecoder().decode(data);
+        const results = Papa.parse(text, { skipEmptyLines: true });
+        const shiftData = parseShiftData(results.data as string[][]);
+        onDataLoaded(shiftData);
+        onError([]);
+      } else if (['xlsx', 'xls', 'ods'].includes(fileExtension || '')) {
+        // Parse Excel/ODS
+        const wb = XLSX.read(data, { type: 'array' });
+        setWorkbook(wb);
+
+        // Determine which sheet to load
+        let targetSheet = sheetName || wb.SheetNames[0];
+        
+        // If specified sheet doesn't exist, use first sheet
+        if (!wb.SheetNames.includes(targetSheet)) {
+          console.warn(`Sheet "${targetSheet}" not found. Using first sheet: "${wb.SheetNames[0]}"`);
+          targetSheet = wb.SheetNames[0];
+        }
+
+        setSelectedSheet(targetSheet);
+        processWorkbookSheet(wb, targetSheet);
+      } else {
+        throw new Error('Unsupported file format');
+      }
+    } catch (err) {
+      onError([{
+        type: 'format',
+        message: `Error loading file from URL: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        severity: 'error'
+      }]);
+    } finally {
+      setIsLoadingUrl(false);
+    }
+  }, [onDataLoaded, onError, processWorkbookSheet]);
+
+  // Effect to load file from URL when urlFile changes
+  useEffect(() => {
+    if (urlFile) {
+      loadFileFromUrl(urlFile.filename, urlFile.page);
+    }
+  }, [urlFile, loadFileFromUrl]);
+
   const handleSheetSelection = useCallback((event: React.ChangeEvent<HTMLSelectElement>) => {
     const sheetName = event.target.value;
     setSelectedSheet(sheetName);
@@ -395,6 +458,35 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError }) => {
       <h2 className="text-2xl font-semibold text-gray-800 mb-4">
         Upload Shift Schedule
       </h2>
+
+      {/* Show URL file info if loading from URL */}
+      {urlFile && (
+        <div className="mb-4 bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <svg className="w-5 h-5 text-green-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            </svg>
+            <div>
+              <p className="text-sm font-medium text-green-800">
+                Loading file from URL: <span className="font-semibold">{urlFile.filename}</span>
+                {urlFile.page && <span className="ml-2">• Page: <span className="font-semibold">{urlFile.page}</span></span>}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isLoadingUrl && (
+        <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+          <div className="flex items-center justify-center">
+            <svg className="animate-spin h-5 w-5 text-blue-600 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span className="text-sm font-medium text-blue-800">Loading file...</span>
+          </div>
+        </div>
+      )}
       
       <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-500 transition-colors">
         <label htmlFor="file-upload" className="cursor-pointer">

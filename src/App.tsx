@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import './App.css'
 import FileUpload from './components/FileUpload'
 import ShiftValidator from './components/ShiftValidator'
@@ -9,6 +9,32 @@ import type { ShiftData, ValidationError } from './types/shift'
 function App() {
   const [shiftData, setShiftData] = useState<ShiftData | null>(null)
   const [errors, setErrors] = useState<ValidationError[]>([])
+  const [urlFile, setUrlFile] = useState<{ filename: string; page?: string } | null>(null)
+
+  // Parse URL hash parameters on mount and when hash changes
+  useEffect(() => {
+    const parseHash = () => {
+      const hash = window.location.hash.slice(1) // Remove '#'
+      if (!hash) {
+        setUrlFile(null)
+        return
+      }
+
+      const params = new URLSearchParams(hash.replace(/#/g, '&'))
+      const file = params.get('file')
+      const page = params.get('page')
+
+      if (file) {
+        setUrlFile({ filename: file, page: page || undefined })
+      } else {
+        setUrlFile(null)
+      }
+    }
+
+    parseHash()
+    window.addEventListener('hashchange', parseHash)
+    return () => window.removeEventListener('hashchange', parseHash)
+  }, [])
 
   return (
     <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100">
@@ -23,7 +49,11 @@ function App() {
         </header>
 
         <div className="max-w-6xl mx-auto space-y-8">
-          <FileUpload onDataLoaded={setShiftData} onError={setErrors} />
+          <FileUpload 
+            onDataLoaded={setShiftData} 
+            onError={setErrors} 
+            urlFile={urlFile}
+          />
           
           {shiftData && (
             <>
