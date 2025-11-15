@@ -7,7 +7,7 @@ interface StatisticsProps {
 }
 
 const Statistics: React.FC<StatisticsProps> = ({ shiftData }) => {
-  const [isRelativeMode, setIsRelativeMode] = useState(false);
+  const [isRelativeMode, setIsRelativeMode] = useState(true);
   const [showCalendarModal, setShowCalendarModal] = useState(false);
   const [selectedDoctor, setSelectedDoctor] = useState<string>('');
   const [selectedMonth, setSelectedMonth] = useState<number>(10); // November (0-indexed)
