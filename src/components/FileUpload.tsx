@@ -109,20 +109,72 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError }) => {
               region
             });
           }
-        } else if (cell.match(/08-16/i) || columnType.type === '8h') {
-          // 8-hour shift: 08:00 - 16:00
-          const name = cell.replace(/08-16/i, '').trim().toLowerCase();
-          if (name) {
-            allShifts.push({
-              name,
-              day,
-              shiftType: '8h',
-              column: col,
-              hours: 8,
-              startDateTime: createShiftDateTime(day, 8),
-              endDateTime: createShiftDateTime(day, 16),
-              region
-            });
+        } else if (cell.match(/\s*(\d{2})-(\d{2})\s*$/)) {
+          // Time range format: "name HH-MM" (e.g., "orkun 20-08", "cemre 08-20", "tanju 08-16")
+          const timeRangeMatch = cell.match(/^(.+?)\s*(\d{2})-(\d{2})\s*$/);
+          if (timeRangeMatch) {
+            const name = timeRangeMatch[1].trim().toLowerCase();
+            const startHour = parseInt(timeRangeMatch[2]);
+            const endHour = parseInt(timeRangeMatch[3]);
+            
+            if (name) {
+              // Determine shift type based on time range
+              if (startHour === 8 && endHour === 16) {
+                // 08-16: 8-hour day shift
+                allShifts.push({
+                  name,
+                  day,
+                  shiftType: '8h',
+                  column: col,
+                  hours: 8,
+                  startDateTime: createShiftDateTime(day, 8),
+                  endDateTime: createShiftDateTime(day, 16),
+                  region
+                });
+              } else if (startHour === 8 && endHour === 20) {
+                // 08-20: 12-hour morning shift
+                allShifts.push({
+                  name,
+                  day,
+                  shiftType: 'morning',
+                  column: col,
+                  hours: 12,
+                  startDateTime: createShiftDateTime(day, 8),
+                  endDateTime: createShiftDateTime(day, 20),
+                  region
+                });
+              } else if (startHour === 20 && endHour === 8) {
+                // 20-08: 12-hour evening/night shift
+                allShifts.push({
+                  name,
+                  day,
+                  shiftType: 'evening',
+                  column: col,
+                  hours: 12,
+                  startDateTime: createShiftDateTime(day, 20),
+                  endDateTime: createShiftDateTime(day, 8, 1), // next day at 08:00
+                  region
+                });
+              } else {
+                // Generic time range - calculate hours
+                let hours = endHour - startHour;
+                if (hours <= 0) hours += 24; // crosses midnight
+                
+                const shiftType = hours === 8 ? '8h' : hours === 12 ? 'morning' : hours === 16 ? '16h' : '24h';
+                allShifts.push({
+                  name,
+                  day,
+                  shiftType,
+                  column: col,
+                  hours,
+                  startDateTime: createShiftDateTime(day, startHour),
+                  endDateTime: endHour <= startHour 
+                    ? createShiftDateTime(day, endHour, 1) 
+                    : createShiftDateTime(day, endHour),
+                  region
+                });
+              }
+            }
           }
         } else if (columnType.type === '16h' || cell.match(/16$/)) {
           // 16-hour shift: 08:00 - 00:00
