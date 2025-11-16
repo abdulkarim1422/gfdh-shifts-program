@@ -12,6 +12,19 @@ const Statistics: React.FC<StatisticsProps> = ({ shiftData }) => {
   const [selectedDoctor, setSelectedDoctor] = useState<string>('');
   const [selectedMonth, setSelectedMonth] = useState<number>(10); // November (0-indexed)
   const [selectedYear, setSelectedYear] = useState<number>(2025);
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+
+  const toggleRowExpansion = (doctorName: string) => {
+    setExpandedRows(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(doctorName)) {
+        newSet.delete(doctorName);
+      } else {
+        newSet.add(doctorName);
+      }
+      return newSet;
+    });
+  };
 
   // Function to open modal for calendar export
   const openCalendarModal = (doctorName: string) => {
@@ -225,73 +238,144 @@ END:VEVENT
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {statistics.map((stat, index) => (
-                  <tr 
-                    key={stat.name}
-                    className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
-                  >
-                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
-                      <div className="text-xs sm:text-sm font-medium text-gray-900 capitalize">
-                        {stat.name}
-                      </div>
-                    </td>
-                    <td className="px-2 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
-                      <div className="text-xs sm:text-sm text-gray-900">{stat.totalDays}</div>
-                    </td>
-                    <td className="px-2 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
-                      <div className="text-xs sm:text-sm font-semibold text-gray-900">
-                        {stat.totalHours}h
-                      </div>
-                    </td>
-                    <td className="hidden md:table-cell px-6 py-4 whitespace-nowrap">
-                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
-                        {stat.shifts24h}
-                      </span>
-                    </td>
-                    <td className="hidden md:table-cell px-6 py-4 whitespace-nowrap">
-                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-purple-100 text-purple-800">
-                        {stat.shifts16h}
-                      </span>
-                    </td>
-                    <td className="hidden md:table-cell px-6 py-4 whitespace-nowrap">
-                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                        {stat.shifts12h}
-                      </span>
-                    </td>
-                    <td className="hidden md:table-cell px-6 py-4 whitespace-nowrap">
-                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                        {stat.shifts8h}
-                      </span>
-                    </td>
-                    <td className="hidden lg:table-cell px-6 py-4">
-                      <div className="text-sm text-gray-500 max-w-md">
-                        {stat.daysList.sort((a, b) => a - b).join(', ')}
-                      </div>
-                    </td>
-                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
-                      <button
-                        onClick={() => openCalendarModal(stat.name)}
-                        className="inline-flex items-center px-2 sm:px-3 py-1 sm:py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                        title="Download calendar file for all shifts"
+                {statistics.map((stat, index) => {
+                  const isExpanded = expandedRows.has(stat.name);
+                  return (
+                    <React.Fragment key={stat.name}>
+                      <tr 
+                        className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
                       >
-                        <svg 
-                          className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-1.5" 
-                          fill="none" 
-                          stroke="currentColor" 
-                          viewBox="0 0 24 24"
-                        >
-                          <path 
-                            strokeLinecap="round" 
-                            strokeLinejoin="round" 
-                            strokeWidth={2} 
-                            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" 
-                          />
-                        </svg>
-                        <span className="hidden sm:inline">Add to Calendar</span>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => toggleRowExpansion(stat.name)}
+                              className="md:hidden p-1 hover:bg-gray-200 rounded transition-colors"
+                              aria-label={isExpanded ? "Collapse details" : "Expand details"}
+                            >
+                              <svg 
+                                className={`w-4 h-4 text-gray-600 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                                fill="none" 
+                                stroke="currentColor" 
+                                viewBox="0 0 24 24"
+                              >
+                                <path 
+                                  strokeLinecap="round" 
+                                  strokeLinejoin="round" 
+                                  strokeWidth={2} 
+                                  d="M9 5l7 7-7 7" 
+                                />
+                              </svg>
+                            </button>
+                            <div className="text-xs sm:text-sm font-medium text-gray-900 capitalize">
+                              {stat.name}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-2 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
+                          <div className="text-xs sm:text-sm text-gray-900">{stat.totalDays}</div>
+                        </td>
+                        <td className="px-2 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
+                          <div className="text-xs sm:text-sm font-semibold text-gray-900">
+                            {stat.totalHours}h
+                          </div>
+                        </td>
+                        <td className="hidden md:table-cell px-6 py-4 whitespace-nowrap">
+                          <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                            {stat.shifts24h}
+                          </span>
+                        </td>
+                        <td className="hidden md:table-cell px-6 py-4 whitespace-nowrap">
+                          <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-purple-100 text-purple-800">
+                            {stat.shifts16h}
+                          </span>
+                        </td>
+                        <td className="hidden md:table-cell px-6 py-4 whitespace-nowrap">
+                          <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                            {stat.shifts12h}
+                          </span>
+                        </td>
+                        <td className="hidden md:table-cell px-6 py-4 whitespace-nowrap">
+                          <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                            {stat.shifts8h}
+                          </span>
+                        </td>
+                        <td className="hidden lg:table-cell px-6 py-4">
+                          <div className="text-sm text-gray-500 max-w-md">
+                            {stat.daysList.sort((a, b) => a - b).join(', ')}
+                          </div>
+                        </td>
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
+                          <button
+                            onClick={() => openCalendarModal(stat.name)}
+                            className="inline-flex items-center px-2 sm:px-3 py-1 sm:py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                            title="Download calendar file for all shifts"
+                          >
+                            <svg 
+                              className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-1.5" 
+                              fill="none" 
+                              stroke="currentColor" 
+                              viewBox="0 0 24 24"
+                            >
+                              <path 
+                                strokeLinecap="round" 
+                                strokeLinejoin="round" 
+                                strokeWidth={2} 
+                                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" 
+                              />
+                            </svg>
+                            <span className="hidden sm:inline">Add to Calendar</span>
+                          </button>
+                        </td>
+                      </tr>
+                      {/* Expanded Details Row for Mobile */}
+                      {isExpanded && (
+                        <tr className={`md:hidden ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                          <td colSpan={9} className="px-3 py-3">
+                            <div className="space-y-3 border-l-4 border-indigo-500 pl-3">
+                              {/* Shift Breakdown */}
+                              <div>
+                                <h4 className="text-xs font-semibold text-gray-700 mb-2">Shift Breakdown:</h4>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div className="flex items-center justify-between bg-blue-50 rounded px-2 py-1.5">
+                                    <span className="text-xs text-blue-700 font-medium">24h Shifts:</span>
+                                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                                      {stat.shifts24h}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center justify-between bg-purple-50 rounded px-2 py-1.5">
+                                    <span className="text-xs text-purple-700 font-medium">16h Shifts:</span>
+                                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-purple-100 text-purple-800">
+                                      {stat.shifts16h}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center justify-between bg-green-50 rounded px-2 py-1.5">
+                                    <span className="text-xs text-green-700 font-medium">12h Shifts:</span>
+                                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                      {stat.shifts12h}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center justify-between bg-yellow-50 rounded px-2 py-1.5">
+                                    <span className="text-xs text-yellow-700 font-medium">8h Shifts:</span>
+                                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                                      {stat.shifts8h}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                              {/* Day List */}
+                              <div className="lg:hidden">
+                                <h4 className="text-xs font-semibold text-gray-700 mb-1">Shift Days:</h4>
+                                <div className="text-xs text-gray-600 bg-gray-50 rounded px-2 py-1.5">
+                                  {stat.daysList.sort((a, b) => a - b).join(', ')}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
