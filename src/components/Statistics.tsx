@@ -13,6 +13,8 @@ const Statistics: React.FC<StatisticsProps> = ({ shiftData }) => {
   const [selectedMonth, setSelectedMonth] = useState<number>(10); // November (0-indexed)
   const [selectedYear, setSelectedYear] = useState<number>(2025);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [sortBy, setSortBy] = useState<'name' | 'totalDays' | 'totalHours' | 'shifts24h' | 'shifts16h' | 'shifts12h' | 'shifts8h'>('totalHours');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   const toggleRowExpansion = (doctorName: string) => {
     setExpandedRows(prev => {
@@ -24,6 +26,17 @@ const Statistics: React.FC<StatisticsProps> = ({ shiftData }) => {
       }
       return newSet;
     });
+  };
+
+  const handleSort = (column: typeof sortBy) => {
+    if (sortBy === column) {
+      // Toggle direction if clicking the same column
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // Set new column and default to descending (except for name)
+      setSortBy(column);
+      setSortDirection(column === 'name' ? 'asc' : 'desc');
+    }
   };
 
   // Function to open modal for calendar export
@@ -162,10 +175,41 @@ END:VEVENT
       }
     });
 
-    // Sort by total hours (descending)
-    return Array.from(doctorMap.values())
-      .sort((a, b) => b.totalHours - a.totalHours);
-  }, [shiftData]);
+    // Sort based on selected column and direction
+    const doctorsList = Array.from(doctorMap.values());
+    
+    doctorsList.sort((a, b) => {
+      let comparison = 0;
+      
+      switch (sortBy) {
+        case 'name':
+          comparison = a.name.localeCompare(b.name);
+          break;
+        case 'totalDays':
+          comparison = a.totalDays - b.totalDays;
+          break;
+        case 'totalHours':
+          comparison = a.totalHours - b.totalHours;
+          break;
+        case 'shifts24h':
+          comparison = a.shifts24h - b.shifts24h;
+          break;
+        case 'shifts16h':
+          comparison = a.shifts16h - b.shifts16h;
+          break;
+        case 'shifts12h':
+          comparison = a.shifts12h - b.shifts12h;
+          break;
+        case 'shifts8h':
+          comparison = a.shifts8h - b.shifts8h;
+          break;
+      }
+      
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+    
+    return doctorsList;
+  }, [shiftData, sortBy, sortDirection]);
 
   const totalShifts = shiftData.allShifts.length;
   const uniqueDoctors = new Set(shiftData.allShifts.map(s => s.name)).size;
@@ -209,25 +253,116 @@ END:VEVENT
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Doctor
+                    <button
+                      onClick={() => handleSort('name')}
+                      className="flex items-center gap-1 hover:text-gray-700 transition-colors"
+                    >
+                      Doctor
+                      <span className="flex flex-col">
+                        <svg className={`w-2 h-2 ${sortBy === 'name' && sortDirection === 'asc' ? 'text-gray-900' : 'text-gray-400'}`} fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M7 14l5-5 5 5z" />
+                        </svg>
+                        <svg className={`w-2 h-2 -mt-1 ${sortBy === 'name' && sortDirection === 'desc' ? 'text-gray-900' : 'text-gray-400'}`} fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M7 10l5 5 5-5z" />
+                        </svg>
+                      </span>
+                    </button>
                   </th>
                   <th className="px-2 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Days
+                    <button
+                      onClick={() => handleSort('totalDays')}
+                      className="flex items-center gap-1 hover:text-gray-700 transition-colors"
+                    >
+                      Days
+                      <span className="flex flex-col">
+                        <svg className={`w-2 h-2 ${sortBy === 'totalDays' && sortDirection === 'asc' ? 'text-gray-900' : 'text-gray-400'}`} fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M7 14l5-5 5 5z" />
+                        </svg>
+                        <svg className={`w-2 h-2 -mt-1 ${sortBy === 'totalDays' && sortDirection === 'desc' ? 'text-gray-900' : 'text-gray-400'}`} fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M7 10l5 5 5-5z" />
+                        </svg>
+                      </span>
+                    </button>
                   </th>
                   <th className="px-2 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Hours
+                    <button
+                      onClick={() => handleSort('totalHours')}
+                      className="flex items-center gap-1 hover:text-gray-700 transition-colors"
+                    >
+                      Hours
+                      <span className="flex flex-col">
+                        <svg className={`w-2 h-2 ${sortBy === 'totalHours' && sortDirection === 'asc' ? 'text-gray-900' : 'text-gray-400'}`} fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M7 14l5-5 5 5z" />
+                        </svg>
+                        <svg className={`w-2 h-2 -mt-1 ${sortBy === 'totalHours' && sortDirection === 'desc' ? 'text-gray-900' : 'text-gray-400'}`} fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M7 10l5 5 5-5z" />
+                        </svg>
+                      </span>
+                    </button>
                   </th>
                   <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    24h
+                    <button
+                      onClick={() => handleSort('shifts24h')}
+                      className="flex items-center gap-1 hover:text-gray-700 transition-colors"
+                    >
+                      24h
+                      <span className="flex flex-col">
+                        <svg className={`w-2 h-2 ${sortBy === 'shifts24h' && sortDirection === 'asc' ? 'text-gray-900' : 'text-gray-400'}`} fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M7 14l5-5 5 5z" />
+                        </svg>
+                        <svg className={`w-2 h-2 -mt-1 ${sortBy === 'shifts24h' && sortDirection === 'desc' ? 'text-gray-900' : 'text-gray-400'}`} fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M7 10l5 5 5-5z" />
+                        </svg>
+                      </span>
+                    </button>
                   </th>
                   <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    16h
+                    <button
+                      onClick={() => handleSort('shifts16h')}
+                      className="flex items-center gap-1 hover:text-gray-700 transition-colors"
+                    >
+                      16h
+                      <span className="flex flex-col">
+                        <svg className={`w-2 h-2 ${sortBy === 'shifts16h' && sortDirection === 'asc' ? 'text-gray-900' : 'text-gray-400'}`} fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M7 14l5-5 5 5z" />
+                        </svg>
+                        <svg className={`w-2 h-2 -mt-1 ${sortBy === 'shifts16h' && sortDirection === 'desc' ? 'text-gray-900' : 'text-gray-400'}`} fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M7 10l5 5 5-5z" />
+                        </svg>
+                      </span>
+                    </button>
                   </th>
                   <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    12h
+                    <button
+                      onClick={() => handleSort('shifts12h')}
+                      className="flex items-center gap-1 hover:text-gray-700 transition-colors"
+                    >
+                      12h
+                      <span className="flex flex-col">
+                        <svg className={`w-2 h-2 ${sortBy === 'shifts12h' && sortDirection === 'asc' ? 'text-gray-900' : 'text-gray-400'}`} fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M7 14l5-5 5 5z" />
+                        </svg>
+                        <svg className={`w-2 h-2 -mt-1 ${sortBy === 'shifts12h' && sortDirection === 'desc' ? 'text-gray-900' : 'text-gray-400'}`} fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M7 10l5 5 5-5z" />
+                        </svg>
+                      </span>
+                    </button>
                   </th>
                   <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    8h
+                    <button
+                      onClick={() => handleSort('shifts8h')}
+                      className="flex items-center gap-1 hover:text-gray-700 transition-colors"
+                    >
+                      8h
+                      <span className="flex flex-col">
+                        <svg className={`w-2 h-2 ${sortBy === 'shifts8h' && sortDirection === 'asc' ? 'text-gray-900' : 'text-gray-400'}`} fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M7 14l5-5 5 5z" />
+                        </svg>
+                        <svg className={`w-2 h-2 -mt-1 ${sortBy === 'shifts8h' && sortDirection === 'desc' ? 'text-gray-900' : 'text-gray-400'}`} fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M7 10l5 5 5-5z" />
+                        </svg>
+                      </span>
+                    </button>
                   </th>
                   <th className="hidden lg:table-cell px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Day List
