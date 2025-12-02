@@ -45,18 +45,20 @@ Column 1: Day numbers (1-31)
 Remaining columns: Shift assignments
 ```
 
+
 ### Shift Types
-- **24-hour shift**: Single doctor name (e.g., `begüm`)
-- **12-hour split shift**: Two names separated by `/` (e.g., `bengisu/ceyda`)
+- **24-hour shift**: Single doctor name (e.g., `DoctorA`)
+- **12-hour split shift**: Two names separated by `/` (e.g., `DoctorA/DoctorB`)
   - First name: Morning shift (12 hours)
   - Second name: Evening shift (12 hours)
-- **8-hour shift**: Name followed by `08-16` (e.g., `murat 08-16`)
+- **8-hour shift**: Name followed by `08-16` (e.g., `DoctorC 08-16`)
 
 ### Example
 ```csv
-ekim25,st,sarı+müs,sarı+müs,...
-1,begüm,hüseyin,nahit,anıl,bengisu/ceyda,...
-2,çınar,alper,gülcan,yiğit,bengisu/ceyda,...
+november,regionA,regionB,regionC,regionD,regionE,regionF
+1,DoctorA,DoctorB,DoctorC,DoctorD,DoctorE/DoctorF,DoctorG
+2,DoctorH,DoctorI,DoctorJ,DoctorK,DoctorE/DoctorF,DoctorL
+3,DoctorM,DoctorN,DoctorO,DoctorP,DoctorQ/DoctorR,DoctorS
 ```
 
 ## Installation
