@@ -95,7 +95,7 @@ const Statistics: React.FC<StatisticsProps> = ({ shiftData }) => {
         const regionsLabel = info.regions.size > 0 ? Array.from(info.regions).join(', ') : 'N/A';
         const shiftLabel = Array.from(info.shiftTypes).join(' + ');
         const timesLabel = info.timeRanges.join(', ');
-        return `- ${formatName(name)} | position: ${regionsLabel} | shift: ${shiftLabel} | hours: ${info.hours}h | time: ${timesLabel}`;
+        return `- ${formatName(name)} | ${regionsLabel} | ${shiftLabel} | ${timesLabel}`;
       });
 
     return ['Todays roster:', ...lines].join('\\n');
