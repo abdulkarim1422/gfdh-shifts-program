@@ -61,7 +61,13 @@ const Statistics: React.FC<StatisticsProps> = ({ shiftData }) => {
 
     const rosterByDoctor = new Map<
       string,
-      { hours: number; regions: Set<string>; shiftTypes: Set<string>; timeRanges: string[] }
+      {
+        hours: number;
+        regions: Set<string>;
+        shiftTypes: Set<string>;
+        timeRanges: string[];
+        columnIndex: number;
+      }
     >();
 
     shiftsOnDay.forEach(shift => {
@@ -70,7 +76,8 @@ const Statistics: React.FC<StatisticsProps> = ({ shiftData }) => {
           hours: 0,
           regions: new Set<string>(),
           shiftTypes: new Set<string>(),
-          timeRanges: []
+          timeRanges: [],
+          columnIndex: shift.column
         });
       }
 
@@ -79,10 +86,11 @@ const Statistics: React.FC<StatisticsProps> = ({ shiftData }) => {
       if (shift.region) entry.regions.add(shift.region);
       entry.shiftTypes.add(shift.shiftType);
       entry.timeRanges.push(`${formatTime(shift.startDateTime)}-${formatTime(shift.endDateTime)}`);
+      entry.columnIndex = Math.min(entry.columnIndex, shift.column);
     });
 
     const lines = Array.from(rosterByDoctor.entries())
-      .sort((a, b) => formatName(a[0]).localeCompare(formatName(b[0])))
+      .sort((a, b) => a[1].columnIndex - b[1].columnIndex || formatName(a[0]).localeCompare(formatName(b[0])))
       .map(([name, info]) => {
         const regionsLabel = info.regions.size > 0 ? Array.from(info.regions).join(', ') : 'N/A';
         const shiftLabel = Array.from(info.shiftTypes).join(' + ');
