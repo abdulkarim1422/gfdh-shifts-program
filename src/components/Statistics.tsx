@@ -45,6 +45,54 @@ const Statistics: React.FC<StatisticsProps> = ({ shiftData }) => {
     setShowCalendarModal(true);
   };
 
+  const formatName = (name: string) =>
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+
+  const formatTime = (date: Date) =>
+    date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+  const buildDayRosterDescription = (day: number) => {
+    const shiftsOnDay = shiftData.allShifts.filter(shift => shift.day === day);
+    if (shiftsOnDay.length === 0) return 'Todays roster: none recorded.';
+
+    const rosterByDoctor = new Map<
+      string,
+      { hours: number; regions: Set<string>; shiftTypes: Set<string>; timeRanges: string[] }
+    >();
+
+    shiftsOnDay.forEach(shift => {
+      if (!rosterByDoctor.has(shift.name)) {
+        rosterByDoctor.set(shift.name, {
+          hours: 0,
+          regions: new Set<string>(),
+          shiftTypes: new Set<string>(),
+          timeRanges: []
+        });
+      }
+
+      const entry = rosterByDoctor.get(shift.name)!;
+      entry.hours += shift.hours;
+      if (shift.region) entry.regions.add(shift.region);
+      entry.shiftTypes.add(shift.shiftType);
+      entry.timeRanges.push(`${formatTime(shift.startDateTime)}-${formatTime(shift.endDateTime)}`);
+    });
+
+    const lines = Array.from(rosterByDoctor.entries())
+      .sort((a, b) => formatName(a[0]).localeCompare(formatName(b[0])))
+      .map(([name, info]) => {
+        const regionsLabel = info.regions.size > 0 ? Array.from(info.regions).join(', ') : 'N/A';
+        const shiftLabel = Array.from(info.shiftTypes).join(' + ');
+        const timesLabel = info.timeRanges.join(', ');
+        return `- ${formatName(name)} | position: ${regionsLabel} | shift: ${shiftLabel} | hours: ${info.hours}h | time: ${timesLabel}`;
+      });
+
+    return ['Todays roster:', ...lines].join('\\n');
+  };
+
   // Function to generate iCalendar (.ics) file for a doctor's shifts
   const generateCalendarFile = () => {
     const doctorShifts = shiftData.allShifts.filter(shift => shift.name === selectedDoctor);
@@ -100,6 +148,15 @@ X-WR-TIMEZONE:UTC
       const startDateStr = startDate.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
       const endDateStr = endDate.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
       const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+
+      const descriptionLines = [
+        `Shift Type: ${shift.shiftType}`,
+        `Region: ${shift.region || 'N/A'}`,
+        `Hours: ${shift.hours}h`,
+        buildDayRosterDescription(shift.day)
+      ];
+
+      const description = descriptionLines.join('\\n');
       
       icsContent += `BEGIN:VEVENT
 UID:shift-${selectedDoctor}-${shift.day}-${index}@shifts-program
@@ -107,7 +164,7 @@ DTSTAMP:${now}
 DTSTART:${startDateStr}
 DTEND:${endDateStr}
 SUMMARY:${shift.shiftType.toUpperCase()} Shift - ${shift.region}
-DESCRIPTION:Shift Type: ${shift.shiftType}\\nRegion: ${shift.region}\\nHours: ${shift.hours}h
+DESCRIPTION:${description}
 LOCATION:${shift.region}
 STATUS:CONFIRMED
 END:VEVENT
