@@ -10,8 +10,11 @@ const Statistics: React.FC<StatisticsProps> = ({ shiftData }) => {
   const [isRelativeMode, setIsRelativeMode] = useState(true);
   const [showCalendarModal, setShowCalendarModal] = useState(false);
   const [selectedDoctor, setSelectedDoctor] = useState<string>('');
-  const [selectedMonth, setSelectedMonth] = useState<number>(10); // November (0-indexed)
-  const [selectedYear, setSelectedYear] = useState<number>(2025);
+  // Preselect month/year as (today + 10 days)
+  const todayPlus10 = new Date();
+  todayPlus10.setDate(todayPlus10.getDate() + 10);
+  const [selectedMonth, setSelectedMonth] = useState<number>(todayPlus10.getMonth());
+  const [selectedYear, setSelectedYear] = useState<number>(todayPlus10.getFullYear());
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [sortBy, setSortBy] = useState<'name' | 'totalDays' | 'totalHours' | 'shifts24h' | 'shifts16h' | 'shifts12h' | 'shifts8h'>('totalHours');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
