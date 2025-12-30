@@ -10,6 +10,8 @@ const Statistics: React.FC<StatisticsProps> = ({ shiftData }) => {
   const [isRelativeMode, setIsRelativeMode] = useState(true);
   const [showCalendarModal, setShowCalendarModal] = useState(false);
   const [selectedDoctor, setSelectedDoctor] = useState<string>('');
+  const [exportMode, setExportMode] = useState<'full-event' | 'full-day'>('full-event');
+  const [showAdditionalOptions, setShowAdditionalOptions] = useState(false);
   // Preselect month/year as (today + 10 days)
   const todayPlus10 = new Date();
   todayPlus10.setDate(todayPlus10.getDate() + 10);
@@ -107,17 +109,17 @@ const Statistics: React.FC<StatisticsProps> = ({ shiftData }) => {
   // Function to generate iCalendar (.ics) file for a doctor's shifts
   const generateCalendarFile = () => {
     const doctorShifts = shiftData.allShifts.filter(shift => shift.name === selectedDoctor);
-    
+
     // Helper function to create date-time with selected month/year
     const createShiftDateTime = (day: number, hour: number, addDay: number = 0): Date => {
       const date = new Date(selectedYear, selectedMonth, day + addDay, hour, 0, 0);
       return date;
     };
 
-    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
-                        'July', 'August', 'September', 'October', 'November', 'December'];
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'];
     const monthName = monthNames[selectedMonth];
-    
+
     let icsContent = `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Shift Schedule//EN
@@ -128,38 +130,6 @@ X-WR-TIMEZONE:UTC
 `;
 
     doctorShifts.forEach((shift, index) => {
-      // Recreate shift dates with the selected month and year
-      let startDate: Date;
-      let endDate: Date;
-
-      switch (shift.shiftType) {
-        case 'morning':
-          startDate = createShiftDateTime(shift.day, 8);
-          endDate = createShiftDateTime(shift.day, 20);
-          break;
-        case 'evening':
-          startDate = createShiftDateTime(shift.day, 20);
-          endDate = createShiftDateTime(shift.day, 8, 1);
-          break;
-        case '8h':
-          startDate = createShiftDateTime(shift.day, 8);
-          endDate = createShiftDateTime(shift.day, 16);
-          break;
-        case '16h':
-          startDate = createShiftDateTime(shift.day, 8);
-          endDate = createShiftDateTime(shift.day, 0, 1);
-          break;
-        case '24h':
-        default:
-          startDate = createShiftDateTime(shift.day, 8);
-          endDate = createShiftDateTime(shift.day, 8, 1);
-          break;
-      }
-
-      const startDateStr = startDate.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-      const endDateStr = endDate.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-      const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-
       const descriptionLines = [
         `Shift Type: ${shift.shiftType}`,
         `Region: ${shift.region || 'N/A'}`,
@@ -168,8 +138,57 @@ X-WR-TIMEZONE:UTC
       ];
 
       const description = descriptionLines.join('\\n');
-      
-      icsContent += `BEGIN:VEVENT
+      const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+
+      if (exportMode === 'full-day') {
+        // Full-day event mode - use DATE format (no times)
+        const eventDate = new Date(selectedYear, selectedMonth, shift.day);
+        const dateStr = eventDate.toISOString().split('T')[0].replace(/-/g, '');
+
+        icsContent += `BEGIN:VEVENT
+UID:shift-${selectedDoctor}-${shift.day}-${index}@shifts-program
+DTSTAMP:${now}
+DTSTART;VALUE=DATE:${dateStr}
+DTEND;VALUE=DATE:${dateStr}
+SUMMARY:${shift.shiftType.toUpperCase()} Shift - ${shift.region}
+DESCRIPTION:${description}
+LOCATION:${shift.region}
+STATUS:CONFIRMED
+END:VEVENT
+`;
+      } else {
+        // Full event mode - respect shift hours
+        let startDate: Date;
+        let endDate: Date;
+
+        switch (shift.shiftType) {
+          case 'morning':
+            startDate = createShiftDateTime(shift.day, 8);
+            endDate = createShiftDateTime(shift.day, 20);
+            break;
+          case 'evening':
+            startDate = createShiftDateTime(shift.day, 20);
+            endDate = createShiftDateTime(shift.day, 8, 1);
+            break;
+          case '8h':
+            startDate = createShiftDateTime(shift.day, 8);
+            endDate = createShiftDateTime(shift.day, 16);
+            break;
+          case '16h':
+            startDate = createShiftDateTime(shift.day, 8);
+            endDate = createShiftDateTime(shift.day, 0, 1);
+            break;
+          case '24h':
+          default:
+            startDate = createShiftDateTime(shift.day, 8);
+            endDate = createShiftDateTime(shift.day, 8, 1);
+            break;
+        }
+
+        const startDateStr = startDate.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+        const endDateStr = endDate.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+
+        icsContent += `BEGIN:VEVENT
 UID:shift-${selectedDoctor}-${shift.day}-${index}@shifts-program
 DTSTAMP:${now}
 DTSTART:${startDateStr}
@@ -180,10 +199,11 @@ LOCATION:${shift.region}
 STATUS:CONFIRMED
 END:VEVENT
 `;
+      }
     });
 
     icsContent += 'END:VCALENDAR';
-    
+
     // Create and download the .ics file
     const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
     const link = document.createElement('a');
@@ -193,7 +213,7 @@ END:VEVENT
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(link.href);
-    
+
     // Close modal
     setShowCalendarModal(false);
   };
@@ -216,7 +236,7 @@ END:VEVENT
       }
 
       const stats = doctorMap.get(shift.name)!;
-      
+
       // Add day to list if not already present
       if (!stats.daysList.includes(shift.day)) {
         stats.daysList.push(shift.day);
@@ -225,7 +245,7 @@ END:VEVENT
 
       // Calculate hours based on shift type (use the hours field from shift)
       stats.totalHours += shift.hours;
-      
+
       switch (shift.shiftType) {
         case '24h':
           stats.shifts24h++;
@@ -245,10 +265,10 @@ END:VEVENT
 
     // Sort based on selected column and direction
     const doctorsList = Array.from(doctorMap.values());
-    
+
     doctorsList.sort((a, b) => {
       let comparison = 0;
-      
+
       switch (sortBy) {
         case 'name':
           comparison = a.name.localeCompare(b.name);
@@ -272,10 +292,10 @@ END:VEVENT
           comparison = a.shifts8h - b.shifts8h;
           break;
       }
-      
+
       return sortDirection === 'asc' ? comparison : -comparison;
     });
-    
+
     return doctorsList;
   }, [shiftData, sortBy, sortDirection]);
 
@@ -445,7 +465,7 @@ END:VEVENT
                   const isExpanded = expandedRows.has(stat.name);
                   return (
                     <React.Fragment key={stat.name}>
-                      <tr 
+                      <tr
                         className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
                       >
                         <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
@@ -455,17 +475,17 @@ END:VEVENT
                               className="md:hidden p-1 hover:bg-gray-200 rounded transition-colors"
                               aria-label={isExpanded ? "Collapse details" : "Expand details"}
                             >
-                              <svg 
+                              <svg
                                 className={`w-4 h-4 text-gray-600 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
-                                fill="none" 
-                                stroke="currentColor" 
+                                fill="none"
+                                stroke="currentColor"
                                 viewBox="0 0 24 24"
                               >
-                                <path 
-                                  strokeLinecap="round" 
-                                  strokeLinejoin="round" 
-                                  strokeWidth={2} 
-                                  d="M9 5l7 7-7 7" 
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M9 5l7 7-7 7"
                                 />
                               </svg>
                             </button>
@@ -513,17 +533,17 @@ END:VEVENT
                             className="inline-flex items-center px-2 sm:px-3 py-1 sm:py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                             title="Download calendar file for all shifts"
                           >
-                            <svg 
-                              className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-1.5" 
-                              fill="none" 
-                              stroke="currentColor" 
+                            <svg
+                              className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-1.5"
+                              fill="none"
+                              stroke="currentColor"
                               viewBox="0 0 24 24"
                             >
-                              <path 
-                                strokeLinecap="round" 
-                                strokeLinejoin="round" 
-                                strokeWidth={2} 
-                                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" 
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
                               />
                             </svg>
                             <span className="hidden sm:inline">Add to Calendar</span>
@@ -604,7 +624,7 @@ END:VEVENT
             const absolutePercentage = totalHours > 0 ? (stat.totalHours / totalHours) * 100 : 0;
             const relativePercentage = maxHours > 0 ? (stat.totalHours / maxHours) * 100 : 0;
             const displayPercentage = isRelativeMode ? relativePercentage : absolutePercentage;
-            
+
             return (
               <div key={stat.name}>
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-1 gap-1 sm:gap-0">
@@ -639,7 +659,7 @@ END:VEVENT
             <h3 className="text-lg sm:text-xl font-semibold text-gray-800 mb-3 sm:mb-4">
               Export Calendar for {selectedDoctor}
             </h3>
-            
+
             <div className="space-y-3 sm:space-y-4">
               <div>
                 <label htmlFor="month-select" className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
@@ -684,6 +704,68 @@ END:VEVENT
               <div className="text-xs sm:text-sm text-gray-600 bg-blue-50 rounded p-2 sm:p-3">
                 <p className="font-medium mb-1">Note:</p>
                 <p>The calendar file (.ics) will contain all shifts for this doctor with the dates set to the selected month and year.</p>
+              </div>
+
+              {/* Additional Options - Collapsible */}
+              <div className="border-t border-gray-200 pt-3">
+                <button
+                  onClick={() => setShowAdditionalOptions(!showAdditionalOptions)}
+                  className="text-xs sm:text-sm text-gray-500 hover:text-gray-700 transition-colors flex items-center gap-1"
+                >
+                  <svg
+                    className={`w-3 h-3 transition-transform ${showAdditionalOptions ? 'rotate-90' : ''}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                  Additional options
+                </button>
+
+                {showAdditionalOptions && (
+                  <div className="mt-3 space-y-3 pl-4">
+                    <div className="space-y-2">
+                      <label className="flex items-start gap-2 cursor-pointer group">
+                        <input
+                          type="radio"
+                          name="export-mode"
+                          value="full-event"
+                          checked={exportMode === 'full-event'}
+                          onChange={(e) => setExportMode(e.target.value as 'full-event' | 'full-day')}
+                          className="mt-0.5 w-4 h-4 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <div className="flex-1">
+                          <div className="text-xs sm:text-sm font-medium text-gray-700 group-hover:text-gray-900">
+                            Add as full Event (Default)
+                          </div>
+                          <div className="text-xs text-gray-500 mt-0.5">
+                            Adds shifts as events with their specific hours respected (e.g., 08:00-20:00 for morning shifts)
+                          </div>
+                        </div>
+                      </label>
+
+                      <label className="flex items-start gap-2 cursor-pointer group">
+                        <input
+                          type="radio"
+                          name="export-mode"
+                          value="full-day"
+                          checked={exportMode === 'full-day'}
+                          onChange={(e) => setExportMode(e.target.value as 'full-event' | 'full-day')}
+                          className="mt-0.5 w-4 h-4 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <div className="flex-1">
+                          <div className="text-xs sm:text-sm font-medium text-gray-700 group-hover:text-gray-900">
+                            Add as full-day event
+                          </div>
+                          <div className="text-xs text-gray-500 mt-0.5">
+                            Adds shifts as all-day events on that day, regardless of the hours (no specific times shown)
+                          </div>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
