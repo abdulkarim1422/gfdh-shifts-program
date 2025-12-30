@@ -142,14 +142,17 @@ X-WR-TIMEZONE:UTC
 
       if (exportMode === 'full-day') {
         // Full-day event mode - use DATE format (no times)
-        const eventDate = new Date(selectedYear, selectedMonth, shift.day);
-        const dateStr = eventDate.toISOString().split('T')[0].replace(/-/g, '');
+        // Google Calendar requires DTEND to be the next day (exclusive end date)
+        const eventStartDate = new Date(selectedYear, selectedMonth, shift.day);
+        const eventEndDate = new Date(selectedYear, selectedMonth, shift.day + 1);
+        const startDateStr = eventStartDate.toISOString().split('T')[0].replace(/-/g, '');
+        const endDateStr = eventEndDate.toISOString().split('T')[0].replace(/-/g, '');
 
         icsContent += `BEGIN:VEVENT
 UID:shift-${selectedDoctor}-${shift.day}-${index}@shifts-program
 DTSTAMP:${now}
-DTSTART;VALUE=DATE:${dateStr}
-DTEND;VALUE=DATE:${dateStr}
+DTSTART;VALUE=DATE:${startDateStr}
+DTEND;VALUE=DATE:${endDateStr}
 SUMMARY:${shift.shiftType.toUpperCase()} Shift - ${shift.region}
 DESCRIPTION:${description}
 LOCATION:${shift.region}
