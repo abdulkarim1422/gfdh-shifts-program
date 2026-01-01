@@ -12,6 +12,8 @@ const Statistics: React.FC<StatisticsProps> = ({ shiftData }) => {
   const [selectedDoctor, setSelectedDoctor] = useState<string>('');
   const [exportMode, setExportMode] = useState<'full-event' | 'full-day'>('full-event');
   const [showAdditionalOptions, setShowAdditionalOptions] = useState(false);
+  // New: Option to convert 24h to 23:55 for better visualization
+  const [convert24hTo2355, setConvert24hTo2355] = useState(true);
   // Preselect month/year as (today + 10 days)
   const todayPlus10 = new Date();
   todayPlus10.setDate(todayPlus10.getDate() + 10);
@@ -184,7 +186,12 @@ END:VEVENT
           case '24h':
           default:
             startDate = createShiftDateTime(shift.day, 8);
-            endDate = createShiftDateTime(shift.day, 8, 1);
+            if (convert24hTo2355) {
+              // End at 07:55 next day for better visualization
+              endDate = new Date(selectedYear, selectedMonth, shift.day + 1, 7, 55, 0);
+            } else {
+              endDate = createShiftDateTime(shift.day, 8, 1);
+            }
             break;
         }
 
@@ -763,6 +770,25 @@ END:VEVENT
                           </div>
                           <div className="text-xs text-gray-500 mt-0.5">
                             Adds shifts as all-day events on that day, regardless of the hours (no specific times shown)
+                          </div>
+                        </div>
+                      </label>
+
+                      {/* New: Option to convert 24h to 23:55 for better visualization */}
+                      <label className="flex items-start gap-2 cursor-pointer group">
+                        <input
+                          type="checkbox"
+                          name="convert-24h-to-2355"
+                          checked={convert24hTo2355}
+                          onChange={() => setConvert24hTo2355(v => !v)}
+                          className="mt-0.5 w-4 h-4 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <div className="flex-1">
+                          <div className="text-xs sm:text-sm font-medium text-gray-700 group-hover:text-gray-900">
+                            Convert 24 hours to 23:55 for better visualization
+                          </div>
+                          <div className="text-xs text-gray-500 mt-0.5">
+                            Recommended: Makes 24-hour shifts appear as a visual block in Google Calendar week view (default: enabled)
                           </div>
                         </div>
                       </label>
