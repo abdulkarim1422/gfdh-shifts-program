@@ -22,6 +22,8 @@ const Statistics: React.FC<StatisticsProps> = ({ shiftData }) => {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [sortBy, setSortBy] = useState<'name' | 'totalDays' | 'totalHours' | 'shifts24h' | 'shifts16h' | 'shifts12h' | 'shifts8h'>('totalHours');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  // State for mobile day detail modal
+  const [selectedDayDetail, setSelectedDayDetail] = useState<{ doctor: string; day: number; shifts: any[] } | null>(null);
 
   const toggleRowExpansion = (doctorName: string) => {
     setExpandedRows(prev => {
@@ -241,7 +243,9 @@ END:VEVENT
           shifts12h: 0,
           shifts16h: 0,
           shifts8h: 0,
-          daysList: []
+          daysList: [],
+          averageHoursPerDay: 0,
+          maxConsecutiveDays: 0
         });
       }
 
@@ -271,6 +275,30 @@ END:VEVENT
           stats.shifts8h++;
           break;
       }
+    });
+
+    // Calculate additional statistics for each doctor
+    doctorMap.forEach((stats) => {
+      // Calculate average hours per day
+      stats.averageHoursPerDay = stats.totalDays > 0 
+        ? Math.round((stats.totalHours / stats.totalDays) * 10) / 10 
+        : 0;
+      
+      // Calculate max consecutive days
+      const sortedDays = stats.daysList.sort((a, b) => a - b);
+      let maxConsecutive = 0;
+      let currentConsecutive = 1;
+      
+      for (let i = 1; i < sortedDays.length; i++) {
+        if (sortedDays[i] === sortedDays[i - 1] + 1) {
+          currentConsecutive++;
+          maxConsecutive = Math.max(maxConsecutive, currentConsecutive);
+        } else {
+          currentConsecutive = 1;
+        }
+      }
+      
+      stats.maxConsecutiveDays = Math.max(maxConsecutive, currentConsecutive > 1 ? currentConsecutive : 0);
     });
 
     // Sort based on selected column and direction
@@ -533,8 +561,47 @@ END:VEVENT
                           </span>
                         </td>
                         <td className="hidden lg:table-cell px-6 py-4">
-                          <div className="text-sm text-gray-500 max-w-md">
-                            {stat.daysList.sort((a, b) => a - b).join(', ')}
+                          <div className="flex flex-wrap gap-1 max-w-md">
+                            {stat.daysList.sort((a, b) => a - b).map((day) => {
+                              // Get all shifts for this doctor on this day
+                              const shiftsOnDay = shiftData.allShifts.filter(
+                                s => s.name === stat.name && s.day === day
+                              );
+                              
+                              // Calculate total hours for this day
+                              const dayHours = shiftsOnDay.reduce((sum, s) => sum + s.hours, 0);
+                              
+                              // Determine color based on hours (same as Shift Breakdown colors)
+                              let colorClass = 'bg-blue-100 text-blue-800';
+                              if (dayHours >= 24) {
+                                colorClass = 'bg-blue-100 text-blue-800';
+                              } else if (dayHours >= 16) {
+                                colorClass = 'bg-purple-100 text-purple-800';
+                              } else if (dayHours >= 12) {
+                                colorClass = 'bg-green-100 text-green-800';
+                              } else if (dayHours >= 8) {
+                                colorClass = 'bg-yellow-100 text-yellow-800';
+                              } else {
+                                colorClass = 'bg-gray-100 text-gray-800';
+                              }
+                              
+                              // Create tooltip content
+                              const shiftDetails = shiftsOnDay.map(s => {
+                                const startTime = formatTime(s.startDateTime);
+                                const endTime = formatTime(s.endDateTime);
+                                return `${s.shiftType} (${s.hours}h): ${startTime}-${endTime} @ ${s.region}`;
+                              }).join('\n');
+                              
+                              return (
+                                <span
+                                  key={`${stat.name}-${day}`}
+                                  className={`inline-flex items-center justify-center px-2 py-1 text-xs font-semibold rounded ${colorClass} cursor-help transition-all hover:scale-110 hover:shadow-md`}
+                                  title={shiftDetails}
+                                >
+                                  {day}
+                                </span>
+                              );
+                            })}
                           </div>
                         </td>
                         <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
@@ -565,6 +632,20 @@ END:VEVENT
                         <tr className={`md:hidden ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
                           <td colSpan={9} className="px-3 py-3">
                             <div className="space-y-3 border-l-4 border-indigo-500 pl-3">
+                              {/* Additional Statistics */}
+                              <div>
+                                <h4 className="text-xs font-semibold text-gray-700 mb-2">Additional Info:</h4>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div className="bg-indigo-50 rounded px-2 py-1.5">
+                                    <span className="text-xs text-indigo-600 block">Avg Hours/Day:</span>
+                                    <span className="text-sm font-semibold text-indigo-900">{stat.averageHoursPerDay}h</span>
+                                  </div>
+                                  <div className="bg-pink-50 rounded px-2 py-1.5">
+                                    <span className="text-xs text-pink-600 block">Max Consecutive:</span>
+                                    <span className="text-sm font-semibold text-pink-900">{stat.maxConsecutiveDays} days</span>
+                                  </div>
+                                </div>
+                              </div>
                               {/* Shift Breakdown */}
                               <div>
                                 <h4 className="text-xs font-semibold text-gray-700 mb-2">Shift Breakdown:</h4>
@@ -597,9 +678,41 @@ END:VEVENT
                               </div>
                               {/* Day List */}
                               <div className="lg:hidden">
-                                <h4 className="text-xs font-semibold text-gray-700 mb-1">Shift Days:</h4>
-                                <div className="text-xs text-gray-600 bg-gray-50 rounded px-2 py-1.5">
-                                  {stat.daysList.sort((a, b) => a - b).join(', ')}
+                                <h4 className="text-xs font-semibold text-gray-700 mb-2">Shift Days:</h4>
+                                <div className="flex flex-wrap gap-1.5 bg-gray-50 rounded px-2 py-2">
+                                  {stat.daysList.sort((a, b) => a - b).map((day) => {
+                                    // Get all shifts for this doctor on this day
+                                    const shiftsOnDay = shiftData.allShifts.filter(
+                                      s => s.name === stat.name && s.day === day
+                                    );
+                                    
+                                    // Calculate total hours for this day
+                                    const dayHours = shiftsOnDay.reduce((sum, s) => sum + s.hours, 0);
+                                    
+                                    // Determine color based on hours (same as Shift Breakdown colors)
+                                    let colorClass = 'bg-blue-100 text-blue-800';
+                                    if (dayHours >= 24) {
+                                      colorClass = 'bg-blue-100 text-blue-800';
+                                    } else if (dayHours >= 16) {
+                                      colorClass = 'bg-purple-100 text-purple-800';
+                                    } else if (dayHours >= 12) {
+                                      colorClass = 'bg-green-100 text-green-800';
+                                    } else if (dayHours >= 8) {
+                                      colorClass = 'bg-yellow-100 text-yellow-800';
+                                    } else {
+                                      colorClass = 'bg-gray-100 text-gray-800';
+                                    }
+                                    
+                                    return (
+                                      <button
+                                        key={`${stat.name}-mobile-${day}`}
+                                        onClick={() => setSelectedDayDetail({ doctor: stat.name, day, shifts: shiftsOnDay })}
+                                        className={`inline-flex items-center justify-center px-2 py-1 text-xs font-semibold rounded ${colorClass} transition-all active:scale-95 hover:shadow-md`}
+                                      >
+                                        {day}
+                                      </button>
+                                    );
+                                  })}
                                 </div>
                               </div>
                             </div>
@@ -613,6 +726,46 @@ END:VEVENT
             </table>
           </div>
         </div>
+      </div>
+
+      {/* Color Legend */}
+      <div className="mt-4 bg-gray-50 rounded-lg p-3 sm:p-4 border border-gray-200">
+        <h4 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2">Day Color Legend:</h4>
+        <div className="flex flex-wrap gap-2 sm:gap-3">
+          <div className="flex items-center gap-1.5">
+            <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-semibold rounded bg-blue-100 text-blue-800">
+              24+
+            </span>
+            <span className="text-xs text-gray-600">24h shifts</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-semibold rounded bg-purple-100 text-purple-800">
+              16+
+            </span>
+            <span className="text-xs text-gray-600">16h shifts</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-semibold rounded bg-green-100 text-green-800">
+              12+
+            </span>
+            <span className="text-xs text-gray-600">12h shifts</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-semibold rounded bg-yellow-100 text-yellow-800">
+              8+
+            </span>
+            <span className="text-xs text-gray-600">8h shifts</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-semibold rounded bg-gray-100 text-gray-800">
+              &lt;8
+            </span>
+            <span className="text-xs text-gray-600">Less than 8h</span>
+          </div>
+        </div>
+        <p className="text-xs text-gray-500 mt-2 italic">
+          💡 Hover over day numbers (desktop) or tap them (mobile) to see shift details
+        </p>
       </div>
 
       {/* Distribution Chart */}
@@ -812,6 +965,100 @@ END:VEVENT
                 Cancel
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Day Detail Modal for Mobile */}
+      {selectedDayDetail && (
+        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl p-4 max-w-md w-full">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-lg font-semibold text-gray-800">
+                Day {selectedDayDetail.day} - {formatName(selectedDayDetail.doctor)}
+              </h3>
+              <button
+                onClick={() => setSelectedDayDetail(null)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+                aria-label="Close"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="space-y-3">
+              {selectedDayDetail.shifts.map((shift, index) => {
+                const startTime = formatTime(shift.startDateTime);
+                const endTime = formatTime(shift.endDateTime);
+                
+                // Determine color based on shift type
+                let bgColor = 'bg-blue-50';
+                let textColor = 'text-blue-800';
+                let borderColor = 'border-blue-200';
+                
+                if (shift.hours >= 24) {
+                  bgColor = 'bg-blue-50';
+                  textColor = 'text-blue-800';
+                  borderColor = 'border-blue-200';
+                } else if (shift.hours >= 16) {
+                  bgColor = 'bg-purple-50';
+                  textColor = 'text-purple-800';
+                  borderColor = 'border-purple-200';
+                } else if (shift.hours >= 12) {
+                  bgColor = 'bg-green-50';
+                  textColor = 'text-green-800';
+                  borderColor = 'border-green-200';
+                } else if (shift.hours >= 8) {
+                  bgColor = 'bg-yellow-50';
+                  textColor = 'text-yellow-800';
+                  borderColor = 'border-yellow-200';
+                } else {
+                  bgColor = 'bg-gray-50';
+                  textColor = 'text-gray-800';
+                  borderColor = 'border-gray-200';
+                }
+                
+                return (
+                  <div 
+                    key={index} 
+                    className={`${bgColor} ${borderColor} border rounded-lg p-3`}
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <span className={`text-sm font-semibold ${textColor} uppercase`}>
+                        {shift.shiftType}
+                      </span>
+                      <span className={`text-xs font-medium ${textColor} bg-white px-2 py-0.5 rounded`}>
+                        {shift.hours}h
+                      </span>
+                    </div>
+                    <div className={`text-xs ${textColor} space-y-1`}>
+                      <div className="flex items-center gap-1.5">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span>{startTime} - {endTime}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <span>{shift.region}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            
+            <button
+              onClick={() => setSelectedDayDetail(null)}
+              className="mt-4 w-full px-4 py-2 bg-gray-200 text-gray-800 font-medium rounded-md hover:bg-gray-300 transition-colors"
+            >
+              Close
+            </button>
           </div>
         </div>
       )}

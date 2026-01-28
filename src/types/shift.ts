@@ -37,4 +37,6 @@ export interface DoctorStatistics {
   shifts16h: number;
   shifts8h: number;
   daysList: number[];
+  averageHoursPerDay: number;
+  maxConsecutiveDays: number;
 }
