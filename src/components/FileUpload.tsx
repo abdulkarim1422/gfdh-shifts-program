@@ -31,7 +31,9 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError, urlFile 
       const h = header?.toLowerCase().trim() || '';
       const originalHeader = header?.trim() || '';
       
-      if (h.includes('24') || h.includes('yirmi dört')) {
+      if (h.includes('08--24')) {
+        columnShiftTypes[index] = { type: '16h', hours: 16, region: originalHeader };
+      } else if (h.includes('24') || h.includes('yirmi dört')) {
         columnShiftTypes[index] = { type: '24h', hours: 24, region: originalHeader };
       } else if (h.includes('16') || h.includes('on altı')) {
         columnShiftTypes[index] = { type: '16h', hours: 16, region: originalHeader };
