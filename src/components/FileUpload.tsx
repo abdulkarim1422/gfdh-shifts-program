@@ -305,6 +305,28 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError, urlFile 
     return { month, entries, allShifts };
   };
 
+  const getBestSheetName = useCallback((wb: XLSX.WorkBook): string => {
+    let bestSheet = wb.SheetNames[0] || '';
+    let bestScore = -1;
+
+    wb.SheetNames.forEach((name) => {
+      try {
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1 }) as string[][];
+        const shiftData = parseShiftData(rows);
+        const score = shiftData.entries.length;
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestSheet = name;
+        }
+      } catch {
+        // ignore invalid/empty sheet
+      }
+    });
+
+    return bestSheet;
+  }, []);
+
   const processWorkbookSheet = useCallback((wb: XLSX.WorkBook, sheetName: string) => {
     try {
       const sheet = wb.Sheets[sheetName];
@@ -352,11 +374,14 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError, urlFile 
         setWorkbook(wb);
 
         // Determine which sheet to load
-        let targetSheet = sheetName || wb.SheetNames[0];
-        
-        // If specified sheet doesn't exist, use first sheet
+        let targetSheet = '';
+        if (sheetName && wb.SheetNames.includes(sheetName)) {
+          targetSheet = sheetName;
+        } else {
+          targetSheet = getBestSheetName(wb) || wb.SheetNames[0];
+        }
+
         if (!wb.SheetNames.includes(targetSheet)) {
-          console.warn(`Sheet "${targetSheet}" not found. Using first sheet: "${wb.SheetNames[0]}"`);
           targetSheet = wb.SheetNames[0];
         }
 
@@ -434,14 +459,16 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError, urlFile 
           setWorkbook(wb);
           
           // If multiple sheets, let user choose; otherwise process first sheet
-          if (wb.SheetNames.length > 1) {
-            setSelectedSheet(wb.SheetNames[0]);
-            // Process first sheet by default
-            processWorkbookSheet(wb, wb.SheetNames[0]);
+          if (wb.SheetNames.length > 0) {
+            const bestSheet = getBestSheetName(wb) || wb.SheetNames[0];
+            setSelectedSheet(bestSheet);
+            processWorkbookSheet(wb, bestSheet);
           } else {
-            // Single sheet - process immediately
-            setSelectedSheet(wb.SheetNames[0]);
-            processWorkbookSheet(wb, wb.SheetNames[0]);
+            onError([{
+              type: 'format',
+              message: 'No sheets found in workbook',
+              severity: 'error'
+            }]);
           }
         } catch (err) {
           onError([{
