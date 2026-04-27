@@ -18,6 +18,39 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError, urlFile 
     // First row contains month and column headers
     const month = rows[0]?.[0] || 'Unknown';
     const headers = rows[0] || [];
+
+    const parseTimeDefinition = (value: string): { startHour: number; endHour: number } | null => {
+      const match = value.match(/^(\d{1,2})\s*[-–—]{1,2}\s*(\d{1,2})$/);
+      if (!match) return null;
+
+      const startHour = parseInt(match[1], 10);
+      const endHourRaw = parseInt(match[2], 10);
+      const endHour = endHourRaw === 24 ? 0 : endHourRaw;
+
+      if (Number.isNaN(startHour) || Number.isNaN(endHour) || startHour < 0 || startHour > 23 || endHour < 0 || endHour > 23) {
+        return null;
+      }
+
+      return { startHour, endHour };
+    };
+
+    const classifyFromTimeDefinition = (value: string): { type: '16h' | '24h' | '8h', hours: number } | null => {
+      const parsed = parseTimeDefinition(value);
+      if (!parsed) return null;
+
+      const { startHour, endHour } = parsed;
+      if (startHour === 8 && endHour === 0) {
+        return { type: '16h', hours: 16 };
+      }
+      if (startHour === 8 && endHour === 8) {
+        return { type: '24h', hours: 24 };
+      }
+      if (startHour === 8 && endHour === 16) {
+        return { type: '8h', hours: 8 };
+      }
+
+      return null;
+    };
     
     // Helper function to create date-time for shifts
     // Using a base year 2025 for calculations (can be any year)
@@ -25,12 +58,39 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError, urlFile 
       return new Date(2025, 0, day + addDay, hour, 0, 0);
     };
     
-    // Parse column headers to determine shift types
+    // Find where actual day data starts (skip blank rows after header)
+    let dataStartIndex = 1;
+    while (dataStartIndex < rows.length) {
+      const firstCell = rows[dataStartIndex]?.[0];
+      const firstCellStr = firstCell != null ? String(firstCell).trim() : '';
+      if (firstCellStr !== '') break;
+      dataStartIndex++;
+    }
+
+    // Some files keep per-column time definitions (e.g., "08--24") on a separate row before day data.
+    let timeDefinitionRow: string[] | null = null;
+    for (let i = 1; i < dataStartIndex; i++) {
+      const row = rows[i] || [];
+      const hasTimeDefinition = row.some((cell, colIndex) => {
+        if (colIndex === 0) return false;
+        const value = cell != null ? String(cell).trim() : '';
+        return value !== '' && parseTimeDefinition(value) !== null;
+      });
+
+      if (hasTimeDefinition) {
+        timeDefinitionRow = row;
+        break;
+      }
+    }
+
+    // Parse column headers (and optional separate time-definition row) to determine shift types.
     const columnShiftTypes: Array<{type: 'split' | '24h' | '16h' | '8h' | 'unknown', hours: number, region: string}> = [];
     headers.forEach((header, index) => {
       const h = header?.toLowerCase().trim() || '';
       const originalHeader = header?.trim() || '';
-      
+      const timeDefinitionCell = timeDefinitionRow?.[index] != null ? String(timeDefinitionRow[index]).trim() : '';
+      const inferredFromTime = timeDefinitionCell ? classifyFromTimeDefinition(timeDefinitionCell) : null;
+
       if (h.includes('08--24')) {
         columnShiftTypes[index] = { type: '16h', hours: 16, region: originalHeader };
       } else if (h.includes('24') || h.includes('yirmi dört')) {
@@ -42,19 +102,12 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded, onError, urlFile 
       } else if (h.includes('/') || h.includes('sarı') || h.includes('müs')) {
         // Split shift columns (morning/evening)
         columnShiftTypes[index] = { type: 'split', hours: 12, region: originalHeader };
+      } else if (inferredFromTime) {
+        columnShiftTypes[index] = { type: inferredFromTime.type, hours: inferredFromTime.hours, region: originalHeader };
       } else {
         columnShiftTypes[index] = { type: 'unknown', hours: 24, region: originalHeader }; // default to 24h
       }
     });
-    
-    // Find where actual day data starts (skip blank rows after header)
-    let dataStartIndex = 1;
-    while (dataStartIndex < rows.length) {
-      const firstCell = rows[dataStartIndex]?.[0];
-      const firstCellStr = firstCell != null ? String(firstCell).trim() : '';
-      if (firstCellStr !== '') break;
-      dataStartIndex++;
-    }
 
     // Find where the actual data ends (before extra info)
     let dataEndIndex = rows.length;
